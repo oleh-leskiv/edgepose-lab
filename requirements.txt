@@ -1,0 +1,6 @@
+pandas>=2.2
+plotly>=6.9.0
+streamlit>=1.60.0
+firebase-admin>=6.5.0
+google-api-python-client>=2.140.0
+google-auth>=2.34.0

@@ -1,0 +1,14 @@
+[project]
+name = "rd-candidates"
+version = "0.1.0"
+description = "EdgePose Lab 2026 candidate explorer"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2",
+    "plotly>=6.9.0",
+    "streamlit>=1.60.0",
+    "firebase-admin>=6.5.0",
+    "google-api-python-client>=2.140.0",
+    "google-auth>=2.34.0",
+]

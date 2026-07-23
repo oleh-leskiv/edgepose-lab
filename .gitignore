@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# App password + service account credentials
+.streamlit/secrets.toml
+
+# Service account key files - never commit these
+*.json
+!.vscode/*.json
+
+# Local copies of candidate data - personal data, keep out of the repo
+data/
+*.xlsx
+.DS_Store
