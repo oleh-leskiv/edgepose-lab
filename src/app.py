@@ -21,6 +21,7 @@ from data import (
     SKILL_LABELS,
     apply_filters,
     explode_counts,
+    interview_display_columns,
     load_merged,
     normalize_link,
 )
@@ -450,8 +451,11 @@ with tab_scores:
         ic1, ic2 = st.columns(2)
         ic1.metric("Interviewed", len(interviewed))
         ic2.metric("Avg interview score", f"{interviewed['average_score'].mean():.1f}")
+        # Show every column the Interviews sheet currently has. Hardcoding a
+        # subset meant a column inserted mid-sheet shifted the positional names
+        # and one field's data appeared under another's heading.
         st.dataframe(
-            interviewed[["full_name", "interviewer_1_score", "interviewer_2_score", "average_score", "decision"]],
+            interviewed[interview_display_columns(interviewed)],
             use_container_width=True,
             hide_index=True,
         )

@@ -235,43 +235,53 @@ def load_candidates() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-# Positional names for the Interviews tab. The sheet has no stable machine-
-# readable headers (they're prose like "Comment\nInterviewer 1\n(Sofiia)"), so
-# columns are identified by position.
-INTERVIEW_COLUMNS = [
-    "first_name",
-    "last_name",
-    "linkedin",
-    "resume_link",
-    "city",
-    "call_datetime",
-    "interviewer_1",
-    "interviewer_1_score",
-    "interviewer_2",
-    "interviewer_2_score",
-    "average_score",
-    "comment_1",
-    "comment_2",
-    "decision",
-]
+# Columns the app itself relies on from the Interviews tab. Everything else is
+# passed through under whatever heading the sheet uses.
+INTERVIEW_REQUIRED = {
+    "first_name": ["first name"],
+    "last_name": ["last name"],
+    "average_score": ["average"],
+    "interviewer_1_score": ["interviewer 1 score"],
+    "interviewer_2_score": ["interviewer 2 score"],
+}
+
+# Headings duplicated from the candidates sheet; dropped on merge so pandas
+# doesn't suffix them with _x/_y.
+INTERVIEW_OVERLAP = {"first_name", "last_name", "linkedin", "resume_link", "city"}
+
+
+def _match_interview_columns(headers: list[str]) -> dict[str, str]:
+    """Map sheet headings to the internal names the app needs.
+
+    Matched on heading text rather than position. The Interviews tab is edited by
+    hand and columns get inserted mid-sheet; positional naming silently shifts
+    every field after the insertion point, so a comment ends up displayed as the
+    hiring decision. Matching on the heading survives that.
+    """
+    resolved: dict[str, str] = {}
+    for internal, patterns in INTERVIEW_REQUIRED.items():
+        for header in headers:
+            text = str(header).strip().lower().replace("\n", " ")
+            if any(p in text for p in patterns):
+                resolved[header] = internal
+                break
+    return resolved
 
 
 def load_interviews() -> pd.DataFrame:
+    """Read the Interviews tab, keeping every column the sheet has.
+
+    Only the handful of fields the app computes on are renamed; the rest keep
+    their original headings so new columns appear in the UI without a code
+    change and none of them can be mistaken for another.
+    """
     df = _read_sheet(INTERVIEWS_SHEET)
-
-    # Tolerate the tab gaining or losing columns. Assigning a fixed-length list
-    # to df.columns raises ValueError on any mismatch, which took the whole app
-    # down when someone edited the sheet. Rename what we can by position, keep
-    # any extras under their original headers, and add missing ones as empty so
-    # downstream code can rely on them existing.
     if df.empty:
-        return pd.DataFrame(columns=INTERVIEW_COLUMNS + ["full_name"])
+        return pd.DataFrame(columns=["first_name", "last_name", "full_name"])
 
-    renamed = list(INTERVIEW_COLUMNS[: len(df.columns)])
-    renamed += [str(c) for c in df.columns[len(renamed) :]]
-    df.columns = renamed
+    df = df.rename(columns=_match_interview_columns(list(df.columns)))
 
-    for col in INTERVIEW_COLUMNS:
+    for col in ("first_name", "last_name"):
         if col not in df.columns:
             df[col] = pd.NA
 
@@ -280,21 +290,47 @@ def load_interviews() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+# Set by load_merged(); read by interview_display_columns() so the scores tab
+# knows which columns came from the Interviews sheet.
+_interview_data_columns: set[str] = set()
+
+
 def load_merged() -> pd.DataFrame:
+    """Candidates joined with whatever the Interviews tab currently holds.
+
+    Every interview column is carried through rather than a fixed subset, so
+    columns added to the sheet show up in the app without a code change. Columns
+    that duplicate candidate fields (name, links, city) are dropped to avoid
+    pandas appending _x/_y suffixes on the join.
+    """
     candidates = load_candidates()
     interviews = load_interviews()
-    interview_cols = [
-        "full_name",
-        "interviewer_1_score",
-        "interviewer_2_score",
-        "average_score",
-        "comment_1",
-        "comment_2",
-        "decision",
-        "call_datetime",
+
+    interview_cols = ["full_name"] + [
+        c for c in interviews.columns if c not in INTERVIEW_OVERLAP and c != "full_name"
     ]
+
+    # Remember which columns are interview-side so the scores tab can list them
+    # without re-reading the sheet.
+    global _interview_data_columns
+    _interview_data_columns = set(interview_cols)
+
     merged = candidates.merge(interviews[interview_cols], on="full_name", how="left")
     return merged
+
+
+
+def interview_display_columns(df: pd.DataFrame) -> list[str]:
+    """Interview columns present in ``df``, in sheet order, for the scores table.
+
+    Read off the merged frame instead of hardcoded, so a column added to the
+    sheet appears automatically. A fixed list is worse than incomplete here: when
+    a column is inserted mid-way, positional names shift and the table shows one
+    field's data under another's heading.
+    """
+    return ["full_name"] + [
+        c for c in df.columns if c in _interview_data_columns and c != "full_name"
+    ]
 
 
 def explode_counts(df: pd.DataFrame, list_col: str) -> pd.Series:
