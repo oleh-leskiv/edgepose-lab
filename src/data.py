@@ -211,6 +211,15 @@ def load_candidates() -> pd.DataFrame:
     df = _read_sheet(CANDIDATES_SHEET)
     df = df.rename(columns=RENAME)
     df = df.dropna(how="all")
+
+    # If a form question gets reworded, its RENAME entry stops matching and the
+    # column silently disappears. Backfill anything expected but absent so the
+    # app degrades to blank cells instead of crashing on first access.
+    expected = set(RENAME.values()) | set(SKILL_COLUMNS) | set(ORDINAL_MAPS) | set(MULTISELECT_COLUMNS)
+    for col in expected:
+        if col not in df.columns:
+            df[col] = pd.NA
+
     df["full_name"] = (df["first_name"].fillna("") + " " + df["last_name"].fillna("")).str.strip()
 
     for col in SKILL_COLUMNS:
@@ -226,24 +235,46 @@ def load_candidates() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+# Positional names for the Interviews tab. The sheet has no stable machine-
+# readable headers (they're prose like "Comment\nInterviewer 1\n(Sofiia)"), so
+# columns are identified by position.
+INTERVIEW_COLUMNS = [
+    "first_name",
+    "last_name",
+    "linkedin",
+    "resume_link",
+    "city",
+    "call_datetime",
+    "interviewer_1",
+    "interviewer_1_score",
+    "interviewer_2",
+    "interviewer_2_score",
+    "average_score",
+    "comment_1",
+    "comment_2",
+    "decision",
+]
+
+
 def load_interviews() -> pd.DataFrame:
     df = _read_sheet(INTERVIEWS_SHEET)
-    df.columns = [
-        "first_name",
-        "last_name",
-        "linkedin",
-        "resume_link",
-        "city",
-        "call_datetime",
-        "interviewer_1",
-        "interviewer_1_score",
-        "interviewer_2",
-        "interviewer_2_score",
-        "average_score",
-        "comment_1",
-        "comment_2",
-        "decision",
-    ]
+
+    # Tolerate the tab gaining or losing columns. Assigning a fixed-length list
+    # to df.columns raises ValueError on any mismatch, which took the whole app
+    # down when someone edited the sheet. Rename what we can by position, keep
+    # any extras under their original headers, and add missing ones as empty so
+    # downstream code can rely on them existing.
+    if df.empty:
+        return pd.DataFrame(columns=INTERVIEW_COLUMNS + ["full_name"])
+
+    renamed = list(INTERVIEW_COLUMNS[: len(df.columns)])
+    renamed += [str(c) for c in df.columns[len(renamed) :]]
+    df.columns = renamed
+
+    for col in INTERVIEW_COLUMNS:
+        if col not in df.columns:
+            df[col] = pd.NA
+
     df = df.dropna(subset=["first_name", "last_name"], how="all")
     df["full_name"] = (df["first_name"].fillna("") + " " + df["last_name"].fillna("")).str.strip()
     return df.reset_index(drop=True)
