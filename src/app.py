@@ -224,9 +224,13 @@ with tab_filters:
         storage.save_filters({k: v for k, v in current_filters.items() if v})
         st.success("Filters saved — they'll be pre-loaded next time the app starts.")
     if btn_reset.button("Reset filters", use_container_width=True):
-        for column, _, _ in FILTER_FIELDS:
-            st.session_state[f"filter_{column}"] = []
+        # Delete the widget-backed keys rather than assigning to them: Streamlit
+        # forbids setting session_state for a key tied to an instantiated widget
+        # (raises StreamlitAPIException). After deletion + rerun the multiselects
+        # re-initialise empty from the now-cleared saved filters.
         storage.save_filters({})
+        for column, _, _ in FILTER_FIELDS:
+            st.session_state.pop(f"filter_{column}", None)
         st.rerun()
 
     filtered_df = apply_filters(df, current_filters)
