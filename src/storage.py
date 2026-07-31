@@ -1,23 +1,20 @@
-"""Durable shared state in Firestore, replacing the previous local ``pool_state.json``.
+"""Durable shared state in Firestore.
 
-Holds saved Filter Pool selections plus per-candidate interview-pool flags/notes, keyed by
-candidate email (stable across spreadsheet re-exports). Moving this off the local filesystem is
-what makes the app deployable to a cloud host: Streamlit Community Cloud has an ephemeral disk,
-so a JSON file there would be wiped on every redeploy, taking the team's hiring notes with it.
+Holds saved Filter Pool selections plus per-candidate interview-pool flags,
+notes, a scheduled-call marker, and a manually-entered recording URL. Keyed by
+candidate email (stable across spreadsheet re-exports).
 
-Per-user identity is still deliberately NOT persisted here or anywhere else on the server: it's
-read fresh from each browser session (see app.py's sidebar). On a shared server one user's
-"remembered" email would otherwise leak into everyone else's session.
+Per-candidate entry shape:
+    {
+      "pool":      {"sofiia": bool, "oleh": bool, "yurii": bool},
+      "notes":     {"sofiia": str,  "oleh": str,  "yurii": str},
+      "scheduled": bool,   # Oleh marks candidates with a scheduled call
+      "recording": str,    # manually pasted link to the call recording
+    }
 
-Firestore layout
-----------------
-``pool_state/filters``      -> {"filters": {field: [values]}}
-``pool_state/candidates``   -> {"<email>": {"pool": {...}, "notes": {...}}}
-
-Both are single documents rather than a collection of per-candidate documents. With ~100
-candidates the whole state is a few KB, so one read per page load is cheaper and simpler than
-querying a collection, and it keeps the ``load_state()`` contract identical to the old JSON
-version -- which is why app.py needs no changes.
+Firestore layout:
+    pool_state/filters      -> {"filters": {field: [values]}}
+    pool_state/candidates   -> {"<email>": <entry>}
 """
 
 from __future__ import annotations
@@ -35,18 +32,11 @@ _CANDIDATES_DOC = "candidates"
 
 @st.cache_resource(show_spinner=False)
 def _client():
-    """Firestore client, built once per server process.
-
-    Credentials come from ``st.secrets["firebase"]`` (a TOML table holding the service-account
-    JSON fields). Kept out of the repo -- see README for how to set it locally and on Streamlit
-    Community Cloud.
-    """
     import firebase_admin
     from firebase_admin import credentials, firestore
 
     if not firebase_admin._apps:
         service_account = dict(st.secrets["firebase"])
-        # TOML mangles the newlines in the PEM private key; restore them.
         if "private_key" in service_account:
             service_account["private_key"] = service_account["private_key"].replace("\\n", "\n")
         firebase_admin.initialize_app(credentials.Certificate(service_account))
@@ -54,7 +44,6 @@ def _client():
 
 
 def load_state() -> dict:
-    """Read the full shared state. Returns the same shape as the old JSON file."""
     try:
         db = _client()
         filters_snap = db.collection(_COLLECTION).document(_FILTERS_DOC).get()
@@ -62,7 +51,7 @@ def load_state() -> dict:
         filters = (filters_snap.to_dict() or {}).get("filters", {}) if filters_snap.exists else {}
         candidates = (candidates_snap.to_dict() or {}) if candidates_snap.exists else {}
         return {"filters": filters, "candidates": candidates}
-    except Exception as exc:  # noqa: BLE001 - surface backend problems in the UI, don't crash
+    except Exception as exc:  # noqa: BLE001
         st.error(f"Could not read shared state from Firestore: {exc}")
         return {"filters": {}, "candidates": {}}
 
@@ -73,41 +62,43 @@ def save_filters(filters: dict[str, list[str]]) -> dict:
     return load_state()
 
 
-def set_pool_flag(email: str, interviewer_key: str, value: bool) -> dict:
-    """Set one interviewer's pool vote for one candidate.
+def _update_candidate(email: str, mutate) -> dict:
+    """Read one candidate's entry, apply mutate(entry), write it back (merge).
 
-    Writes only that candidate's sub-object so two people voting on different candidates at the
-    same time don't overwrite each other.
+    Per-candidate merge writes keep two people editing different candidates from
+    clobbering each other.
     """
     db = _client()
     doc_ref = db.collection(_COLLECTION).document(_CANDIDATES_DOC)
     snapshot = doc_ref.get()
     current = (snapshot.to_dict() or {}) if snapshot.exists else {}
     entry = current.get(email) or {"pool": {}, "notes": {}}
-    entry.setdefault("pool", {})[interviewer_key] = value
+    entry.setdefault("pool", {})
     entry.setdefault("notes", {})
+    mutate(entry)
     doc_ref.set({email: entry}, merge=True)
     return load_state()
+
+
+def set_pool_flag(email: str, interviewer_key: str, value: bool) -> dict:
+    return _update_candidate(email, lambda e: e["pool"].__setitem__(interviewer_key, value))
 
 
 def set_note(email: str, interviewer_key: str, text: str) -> dict:
-    """Set one interviewer's note for one candidate (same merge semantics as set_pool_flag)."""
-    db = _client()
-    doc_ref = db.collection(_COLLECTION).document(_CANDIDATES_DOC)
-    snapshot = doc_ref.get()
-    current = (snapshot.to_dict() or {}) if snapshot.exists else {}
-    entry = current.get(email) or {"pool": {}, "notes": {}}
-    entry.setdefault("notes", {})[interviewer_key] = text
-    entry.setdefault("pool", {})
-    doc_ref.set({email: entry}, merge=True)
-    return load_state()
+    return _update_candidate(email, lambda e: e["notes"].__setitem__(interviewer_key, text))
+
+
+def set_scheduled_call(email: str, value: bool) -> dict:
+    """Mark (or unmark) that a call has been scheduled with this candidate."""
+    return _update_candidate(email, lambda e: e.__setitem__("scheduled", value))
+
+
+def set_recording_url(email: str, url: str) -> dict:
+    """Store a manually-entered link to the interview recording."""
+    return _update_candidate(email, lambda e: e.__setitem__("recording", url.strip()))
 
 
 def import_from_json(path: str) -> dict:
-    """One-off migration: push an old ``pool_state.json`` into Firestore.
-
-    Run once from ``scripts/migrate_state.py``; not used by the app itself.
-    """
     with open(path, "r", encoding="utf-8") as handle:
         state = json.load(handle)
     db = _client()

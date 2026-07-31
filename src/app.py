@@ -42,30 +42,59 @@ MS_LABELS = {
 
 
 # ---------------------------------------------------------------------------
-# Shared-password gate (only enforced if app_password is set in secrets.toml —
-# see .streamlit/secrets.toml.example. This app is meant to be reachable over a
-# public tunnel, so this is the only thing standing between the internet and
-# candidate PII/interview notes.)
+# Google sign-in gate. Anyone with an @it-jim.com Google account can view the
+# app; edit rights are checked separately (see INTERVIEWERS / ADMIN_EMAIL).
+# Replaces the old shared password: a password can't tell WHO is signed in, and
+# "view-only for the whole company, edit for three people" needs a verified
+# identity. Auth is via OIDC (st.login/st.user) configured in [auth] secrets.
+#
+# If [auth] isn't configured (e.g. a bare local run), the gate is skipped so the
+# app still opens — identity just falls back to empty (view-only).
 # ---------------------------------------------------------------------------
-def require_password() -> None:
-    configured_password = st.secrets.get("app_password")
-    if not configured_password:
-        return
-    if st.session_state.get("authed"):
-        return
+ALLOWED_EMAIL_DOMAIN = "it-jim.com"
+
+
+def _auth_configured() -> bool:
+    try:
+        return "auth" in st.secrets
+    except Exception:
+        return False
+
+
+def require_login() -> None:
+    if not _auth_configured():
+        return  # local dev without [auth]: skip the gate
+    if st.user.is_logged_in:
+        email = (st.user.get("email") or "").strip().lower()
+        if email.endswith("@" + ALLOWED_EMAIL_DOMAIN):
+            return
+        # Signed in, but not an it-jim.com account.
+        st.title("EdgePose Lab 2026 — Trainee Candidates")
+        st.error(
+            f"This app is restricted to {ALLOWED_EMAIL_DOMAIN} accounts. "
+            f"You are signed in as {email or 'an unknown account'}."
+        )
+        if st.button("Sign out"):
+            st.logout()
+        st.stop()
 
     st.title("EdgePose Lab 2026 — Trainee Candidates")
-    entered = st.text_input("App password", type="password", key="password_attempt")
-    if st.button("Enter"):
-        if entered == configured_password:
-            st.session_state["authed"] = True
-            st.rerun()
-        else:
-            st.error("Incorrect password.")
+    st.caption("Sign in with your it-jim.com Google account to continue.")
+    if st.button("Log in with Google"):
+        st.login()
     st.stop()
 
 
-require_password()
+require_login()
+
+
+def current_user_email() -> str:
+    """Verified email of the signed-in user, or '' when auth is off (local dev)."""
+    if not _auth_configured():
+        return ""
+    if getattr(st.user, "is_logged_in", False):
+        return (st.user.get("email") or "").strip().lower()
+    return ""
 
 
 @st.cache_data
@@ -83,16 +112,23 @@ st.caption(f"{len(df)} candidates in the response sheet")
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### Your identity")
-    email_input = st.text_input("Your it-jim.com email", key="user_email")
-    current_email = email_input.strip().lower()
+    current_email = current_user_email()
     current_interviewer_key = INTERVIEWERS.get(current_email)
     is_admin = current_email == ADMIN_EMAIL
-    if current_interviewer_key:
-        st.caption(f"Signed in as **{INTERVIEWER_NAMES[current_interviewer_key]}**" + (" (can edit anyone's pool decision)" if is_admin else ""))
-    elif current_email:
-        st.caption("Email not recognized as an interviewer — view only.")
+    if current_email:
+        st.caption(f"Signed in as **{current_email}**")
+        if current_interviewer_key:
+            st.caption(
+                "You can edit pool decisions"
+                + (" for anyone." if is_admin else " in your own column.")
+            )
+        else:
+            st.caption("View only — your account isn't an interviewer.")
+        if _auth_configured() and st.button("Sign out"):
+            st.logout()
     else:
-        st.caption("Enter your email to record interview-pool decisions.")
+        # Local dev without [auth] configured.
+        st.caption("Running without sign-in (local dev) — view only.")
 
 tab_stats, tab_filters, tab_explorer, tab_pool, tab_scores = st.tabs(
     ["Overview & Stats", "Filter Pool", "Candidate Explorer", "Interview Pool", "Interview Scores"]
@@ -276,7 +312,33 @@ def render_pool_controls(row: pd.Series, current_key: str | None, is_admin: bool
                 storage.set_note(row["candidate_key"], key, new_note)
 
     if not current_key and not is_admin:
-        st.caption("Enter your it-jim.com email in the sidebar to record a pool decision.")
+        st.caption("Sign in as an interviewer to record a pool decision.")
+
+    # Scheduled-call marker (Oleh tracks these) and a manually-pasted recording
+    # link. Both editable by any interviewer / admin; stored in Firestore.
+    st.divider()
+    sc_col, rec_col = st.columns([1, 2])
+    with sc_col:
+        scheduled = bool(entry.get("scheduled", False))
+        new_scheduled = st.checkbox(
+            "📅 Call scheduled",
+            value=scheduled,
+            key=f"sched_{row['candidate_key']}",
+            disabled=not (is_admin or current_key),
+        )
+        if new_scheduled != scheduled:
+            storage.set_scheduled_call(row["candidate_key"], new_scheduled)
+    with rec_col:
+        rec_val = entry.get("recording", "")
+        new_rec = st.text_input(
+            "Recording link",
+            value=rec_val,
+            key=f"rec_{row['candidate_key']}",
+            disabled=not (is_admin or current_key),
+            placeholder="Paste the call recording URL",
+        )
+        if new_rec != rec_val:
+            storage.set_recording_url(row["candidate_key"], new_rec)
 
 
 def render_compare(pool_df: pd.DataFrame, default_name: str | None) -> None:
@@ -413,7 +475,10 @@ with tab_pool:
         pool = entry.get("pool", {})
         notes = entry.get("notes", {})
         has_note = any((notes.get(k) or "").strip() for k in INTERVIEWER_NAMES)
-        if not any(pool.values()) and not has_note:
+        scheduled = bool(entry.get("scheduled", False))
+        recording = entry.get("recording", "")
+        # Show a candidate that has any vote, a note, OR a scheduled call.
+        if not any(pool.values()) and not has_note and not scheduled:
             continue
         match = df[df["candidate_key"] == email]
         name = match.iloc[0]["full_name"] if not match.empty else email
@@ -424,9 +489,11 @@ with tab_pool:
                 "Sofiia": "✅" if pool.get("sofiia") else "–",
                 "Oleh": "✅" if pool.get("oleh") else "–",
                 "Yurii": "✅" if pool.get("yurii") else "–",
+                "Scheduled call": "🟣" if scheduled else "–",
                 "Sofiia's note": notes.get("sofiia", ""),
                 "Oleh's note": notes.get("oleh", ""),
                 "Yurii's note": notes.get("yurii", ""),
+                "Recording": recording,
                 "_votes": votes,
             }
         )
@@ -451,13 +518,21 @@ with tab_scores:
         ic1, ic2 = st.columns(2)
         ic1.metric("Interviewed", len(interviewed))
         ic2.metric("Avg interview score", f"{interviewed['average_score'].mean():.1f}")
-        # Show every column the Interviews sheet currently has. Hardcoding a
-        # subset meant a column inserted mid-sheet shifted the positional names
-        # and one field's data appeared under another's heading.
-        st.dataframe(
-            interviewed[interview_display_columns(interviewed)],
-            use_container_width=True,
-            hide_index=True,
+        # Curated columns (see interview_display_columns); junk/duplicate sheet
+        # columns are filtered out. Tidy up the messy multiline headers for
+        # display only.
+        cols = interview_display_columns(interviewed)
+        display = interviewed[cols].rename(
+            columns={
+                "full_name": "Candidate",
+                "interviewer_1_score": "Sofiia score",
+                "interviewer_2_score": "Yurii score",
+                "average_score": "Average",
+                "Advise CV Learing Path": "Advise CV path",
+                "Comment \nInterviewer 1\n(Sofiia)": "Sofiia comment",
+                "Comment \nInterviewer 2\n(Yura)": "Yurii comment",
+            }
         )
+        st.dataframe(display, use_container_width=True, hide_index=True)
     else:
         st.info("No interviews recorded yet.")

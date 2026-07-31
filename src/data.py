@@ -249,6 +249,48 @@ INTERVIEW_REQUIRED = {
 # doesn't suffix them with _x/_y.
 INTERVIEW_OVERLAP = {"first_name", "last_name", "linkedin", "resume_link", "city"}
 
+# Junk / duplicated columns from the Interviews tab that must NOT appear on the
+# Scores table. In the sheet, applicants pasted resume links into the
+# "Current location (city)" column, so city/resume/linkedin there hold shifted
+# or meaningless values; the real versions already live on the candidates side.
+# "Call day and video recording" is a date with the recording link buried in a
+# cell hyperlink the API can't read, so it's dropped in favour of an in-app
+# recording field (see storage / app.py).
+# Internal names to hide outright.
+INTERVIEW_SCORES_HIDE = {
+    "city",
+    "resume_link",
+    "linkedin",
+    "call_datetime",
+    "interviewer_1",
+    "interviewer_2",
+}
+# Substrings: any interview column whose (lowercased) heading contains one of
+# these is also hidden. Catches the raw sheet headers that duplicate candidate
+# data or hold shifted junk — LinkedIn, resume, location, and the call-day date
+# with its un-extractable embedded recording link.
+INTERVIEW_SCORES_HIDE_SUBSTRINGS = (
+    "linkedin",
+    "resume",
+    "current location",
+    "call day",
+)
+
+
+def _is_hidden_interview_col(col: str) -> bool:
+    if col in INTERVIEW_SCORES_HIDE:
+        return True
+    text = str(col).strip().lower()
+    # Keep score and comment columns (they contain "interviewer" too).
+    if col in ("interviewer_1_score", "interviewer_2_score"):
+        return False
+    if "comment" in text or "score" in text:
+        return False
+    # Hide the bare interviewer-NAME columns ("Interviewer 1 ", "Interviewer 2").
+    if text in ("interviewer 1", "interviewer 2"):
+        return True
+    return any(s in text for s in INTERVIEW_SCORES_HIDE_SUBSTRINGS)
+
 
 def _match_interview_columns(headers: list[str]) -> dict[str, str]:
     """Map sheet headings to the internal names the app needs.
@@ -307,7 +349,11 @@ def load_merged() -> pd.DataFrame:
     interviews = load_interviews()
 
     interview_cols = ["full_name"] + [
-        c for c in interviews.columns if c not in INTERVIEW_OVERLAP and c != "full_name"
+        c
+        for c in interviews.columns
+        if c not in INTERVIEW_OVERLAP
+        and not _is_hidden_interview_col(c)
+        and c != "full_name"
     ]
 
     # Remember which columns are interview-side so the scores tab can list them
@@ -320,17 +366,42 @@ def load_merged() -> pd.DataFrame:
 
 
 
-def interview_display_columns(df: pd.DataFrame) -> list[str]:
-    """Interview columns present in ``df``, in sheet order, for the scores table.
 
-    Read off the merged frame instead of hardcoded, so a column added to the
-    sheet appears automatically. A fixed list is worse than incomplete here: when
-    a column is inserted mid-way, positional names shift and the table shows one
-    field's data under another's heading.
+
+def interview_display_columns(df: pd.DataFrame) -> list[str]:
+    """Curated, ordered columns for the Interview Scores table.
+
+    An explicit allow-list rather than "everything from the sheet": several sheet
+    columns hold shifted or duplicated data (see INTERVIEW_SCORES_HIDE) that only
+    confuses the scores view. New meaningful columns can be added here when the
+    team introduces them.
     """
-    return ["full_name"] + [
-        c for c in df.columns if c in _interview_data_columns and c != "full_name"
+    preferred = [
+        "full_name",
+        "interviewer_1_score",
+        "interviewer_2_score",
+        "average_score",
+        "Advise CV Learing Path",
+        "comment_1",
+        "comment_2",
+        "Comment \nInterviewer 1\n(Sofiia)",
+        "Comment \nInterviewer 2\n(Yura)",
+        "decision",
+        "Decision",
     ]
+    # Keep only those that exist, in this order, without duplicates.
+    ordered = [c for c in preferred if c in df.columns]
+    # Append any other interview-side columns that aren't explicitly hidden,
+    # so a newly added column still surfaces instead of silently vanishing.
+    for c in df.columns:
+        if (
+            c in _interview_data_columns
+            and c not in ordered
+            and not _is_hidden_interview_col(c)
+            and c != "full_name"
+        ):
+            ordered.append(c)
+    return ordered
 
 
 def explode_counts(df: pd.DataFrame, list_col: str) -> pd.Series:
