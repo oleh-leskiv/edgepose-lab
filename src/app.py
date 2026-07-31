@@ -508,7 +508,17 @@ with tab_pool:
         v2.metric("≥2 interviewers in favor", sum(1 for r in rows if r["_votes"] >= 2))
         v3.metric("All 3 in favor", sum(1 for r in rows if r["_votes"] == 3))
         table = pd.DataFrame(rows).sort_values("_votes", ascending=False).drop(columns="_votes")
-        st.dataframe(table, use_container_width=True, hide_index=True)
+        st.dataframe(
+            table,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                # Render the pasted recording URLs as clickable links.
+                "Recording": st.column_config.LinkColumn(
+                    "Recording", display_text="Open recording"
+                ),
+            },
+        )
     else:
         st.info("No interview-pool decisions recorded yet — set them from the Candidate Explorer tab.")
 
