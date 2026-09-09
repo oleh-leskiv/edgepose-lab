@@ -28,6 +28,9 @@ from data import (
 
 st.set_page_config(page_title="IT-JIM R&D Labs — Candidates", layout="wide")
 
+# Shown before a lab is chosen: the sign-in screen and the lab picker.
+APP_TITLE = "IT-JIM R&D Labs"
+
 PRIMARY = "#5B8DEF"
 COMPARE = "#F2A354"
 
@@ -62,7 +65,7 @@ def selected_lab() -> str | None:
 
 
 def render_lab_picker() -> None:
-    st.title("IT-JIM R&D Labs")
+    st.title(APP_TITLE)
     st.caption("Choose a lab to review its candidates.")
     st.write("")
 
@@ -111,7 +114,7 @@ def require_login() -> None:
         if email.endswith("@" + ALLOWED_EMAIL_DOMAIN):
             return
         # Signed in, but not an it-jim.com account.
-        st.title("EdgePose Lab 2026 — Trainee Candidates")
+        st.title(APP_TITLE)
         st.error(
             f"This app is restricted to {ALLOWED_EMAIL_DOMAIN} accounts. "
             f"You are signed in as {email or 'an unknown account'}."
@@ -120,7 +123,7 @@ def require_login() -> None:
             st.logout()
         st.stop()
 
-    st.title("EdgePose Lab 2026 — Trainee Candidates")
+    st.title(APP_TITLE)
     st.caption("Sign in with your it-jim.com Google account to continue.")
     if st.button("Log in with Google"):
         st.login()
