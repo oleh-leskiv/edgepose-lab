@@ -12,9 +12,14 @@ Per-candidate entry shape:
       "recording": str,    # manually pasted link to the call recording
     }
 
-Firestore layout:
-    pool_state/filters      -> {"filters": {field: [values]}}
-    pool_state/candidates   -> {"<email>": <entry>}
+Firestore layout (one pair of documents per lab, so labs never mix):
+    pool_state/filters            -> EdgePose filters
+    pool_state/candidates         -> EdgePose candidates
+    pool_state/filters_audio      -> Audio filters
+    pool_state/candidates_audio   -> Audio candidates
+
+EdgePose keeps the original document names, so the votes and notes recorded
+before labs existed stay exactly where they are.
 """
 
 from __future__ import annotations
@@ -30,6 +35,14 @@ _FILTERS_DOC = "filters"
 _CANDIDATES_DOC = "candidates"
 
 
+def _docs(lab: str | None) -> tuple[str, str]:
+    """(filters_doc, candidates_doc) for a lab; EdgePose keeps the old names."""
+    import data
+
+    cfg = data.get_lab(lab)
+    return cfg.get("filters_doc", _FILTERS_DOC), cfg.get("candidates_doc", _CANDIDATES_DOC)
+
+
 @st.cache_resource(show_spinner=False)
 def _client():
     import firebase_admin
@@ -43,11 +56,12 @@ def _client():
     return firestore.client()
 
 
-def load_state() -> dict:
+def load_state(lab: str | None = None) -> dict:
+    filters_doc, candidates_doc = _docs(lab)
     try:
         db = _client()
-        filters_snap = db.collection(_COLLECTION).document(_FILTERS_DOC).get()
-        candidates_snap = db.collection(_COLLECTION).document(_CANDIDATES_DOC).get()
+        filters_snap = db.collection(_COLLECTION).document(filters_doc).get()
+        candidates_snap = db.collection(_COLLECTION).document(candidates_doc).get()
         filters = (filters_snap.to_dict() or {}).get("filters", {}) if filters_snap.exists else {}
         candidates = (candidates_snap.to_dict() or {}) if candidates_snap.exists else {}
         return {"filters": filters, "candidates": candidates}
@@ -56,20 +70,22 @@ def load_state() -> dict:
         return {"filters": {}, "candidates": {}}
 
 
-def save_filters(filters: dict[str, list[str]]) -> dict:
+def save_filters(filters: dict[str, list[str]], lab: str | None = None) -> dict:
+    filters_doc, _ = _docs(lab)
     db = _client()
-    db.collection(_COLLECTION).document(_FILTERS_DOC).set({"filters": filters})
-    return load_state()
+    db.collection(_COLLECTION).document(filters_doc).set({"filters": filters})
+    return load_state(lab)
 
 
-def _update_candidate(email: str, mutate) -> dict:
+def _update_candidate(email: str, mutate, lab: str | None = None) -> dict:
     """Read one candidate's entry, apply mutate(entry), write it back (merge).
 
     Per-candidate merge writes keep two people editing different candidates from
     clobbering each other.
     """
+    _, candidates_doc = _docs(lab)
     db = _client()
-    doc_ref = db.collection(_COLLECTION).document(_CANDIDATES_DOC)
+    doc_ref = db.collection(_COLLECTION).document(candidates_doc)
     snapshot = doc_ref.get()
     current = (snapshot.to_dict() or {}) if snapshot.exists else {}
     entry = current.get(email) or {"pool": {}, "notes": {}}
@@ -77,25 +93,25 @@ def _update_candidate(email: str, mutate) -> dict:
     entry.setdefault("notes", {})
     mutate(entry)
     doc_ref.set({email: entry}, merge=True)
-    return load_state()
+    return load_state(lab)
 
 
-def set_pool_flag(email: str, interviewer_key: str, value: bool) -> dict:
-    return _update_candidate(email, lambda e: e["pool"].__setitem__(interviewer_key, value))
+def set_pool_flag(email: str, interviewer_key: str, value: bool, lab: str | None = None) -> dict:
+    return _update_candidate(email, lambda e: e["pool"].__setitem__(interviewer_key, value), lab)
 
 
-def set_note(email: str, interviewer_key: str, text: str) -> dict:
-    return _update_candidate(email, lambda e: e["notes"].__setitem__(interviewer_key, text))
+def set_note(email: str, interviewer_key: str, text: str, lab: str | None = None) -> dict:
+    return _update_candidate(email, lambda e: e["notes"].__setitem__(interviewer_key, text), lab)
 
 
-def set_scheduled_call(email: str, value: bool) -> dict:
+def set_scheduled_call(email: str, value: bool, lab: str | None = None) -> dict:
     """Mark (or unmark) that a call has been scheduled with this candidate."""
-    return _update_candidate(email, lambda e: e.__setitem__("scheduled", value))
+    return _update_candidate(email, lambda e: e.__setitem__("scheduled", value), lab)
 
 
-def set_recording_url(email: str, url: str) -> dict:
+def set_recording_url(email: str, url: str, lab: str | None = None) -> dict:
     """Store a manually-entered link to the interview recording."""
-    return _update_candidate(email, lambda e: e.__setitem__("recording", url.strip()))
+    return _update_candidate(email, lambda e: e.__setitem__("recording", url.strip()), lab)
 
 
 def import_from_json(path: str) -> dict:

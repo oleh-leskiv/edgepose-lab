@@ -169,6 +169,10 @@ LABS = {
             "yurii.chyrka@it-jim.com": "yurii",
         },
         "interviewer_names": {"sofiia": "Sofiia", "oleh": "Oleh", "yurii": "Yurii"},
+        # Who owns the sheet's "Interviewer 1 / 2" columns, in that order. This
+        # is NOT the same list as interviewer_names: all three vote in the pool,
+        # but only Sofiia and Yurii ran interviews.
+        "score_columns": ["sofiia", "yurii"],
         "admin_email": "sofia.kuzmenko@it-jim.com",
         "rename_extra": {},
         "multiselect_columns": MULTISELECT_COLUMNS,
@@ -187,9 +191,15 @@ LABS = {
         "candidates_sheet": "Form Responses 1",
         "interviews_sheet": "Interviews",
         "map_lab": "music",
-        # Only Yurii ran the Audio interviews.
-        "interviewers": {"yurii.chyrka@it-jim.com": "yurii"},
-        "interviewer_names": {"yurii": "Yurii"},
+        # Audio was interviewed by Yurii and Oleh, in that order: the sheet's
+        # "Interviewer 1" column is Yurii's, "Interviewer 2" is Oleh's. Order
+        # matters -- score and comment headings are named from this mapping.
+        "interviewers": {
+            "yurii.chyrka@it-jim.com": "yurii",
+            "oleh.leskiv@it-jim.com": "oleh",
+        },
+        "interviewer_names": {"yurii": "Yurii", "oleh": "Oleh"},
+        "score_columns": ["yurii", "oleh"],
         "admin_email": "sofia.kuzmenko@it-jim.com",
         "rename_extra": AUDIO_RENAME_EXTRA,
         "multiselect_columns": AUDIO_MULTISELECT_COLUMNS,

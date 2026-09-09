@@ -13,21 +13,20 @@ import streamlit as st
 import storage
 from map_view import render_labs_map
 from data import (
-    ADMIN_EMAIL,
-    FILTER_FIELDS,
-    INTERVIEWER_NAMES,
-    INTERVIEWERS,
-    MULTISELECT_COLUMNS,
+    LABS,
     SKILL_COLUMNS,
     SKILL_LABELS,
     apply_filters,
     explode_counts,
+    get_lab,
     interview_display_columns,
+    lab_filter_fields,
+    lab_multiselect_columns,
     load_merged,
     normalize_link,
 )
 
-st.set_page_config(page_title="EdgePose Lab 2026 — Candidates", layout="wide")
+st.set_page_config(page_title="IT-JIM R&D Labs — Candidates", layout="wide")
 
 PRIMARY = "#5B8DEF"
 COMPARE = "#F2A354"
@@ -39,7 +38,49 @@ MS_LABELS = {
     "edge_tools": "Edge deployment tools",
     "infra_tools": "Infra / compute tools",
     "graphics_tools": "3D / graphics tools",
+    "audio_tasks": "Audio tasks worked on",
 }
+
+
+def ms_label(col_name: str) -> str:
+    """Chart title for a multi-select field, whichever lab defined it."""
+    return MS_LABELS.get(col_name, col_name.replace("_", " ").capitalize())
+
+
+# ---------------------------------------------------------------------------
+# Lab selection. The app serves several recruitment campaigns, each with its own
+# response sheet, interviewers and questions, so a lab is chosen first and every
+# tab below is rendered for that lab. "Both labs" is a cross-lab view and shows
+# the applicant map only -- the scoring tabs are per-lab by definition.
+# ---------------------------------------------------------------------------
+BOTH_LABS = "both"
+_LAB_STATE_KEY = "selected_lab"
+
+
+def selected_lab() -> str | None:
+    return st.session_state.get(_LAB_STATE_KEY)
+
+
+def render_lab_picker() -> None:
+    st.title("IT-JIM R&D Labs")
+    st.caption("Choose a lab to review its candidates.")
+    st.write("")
+
+    columns = st.columns(len(LABS) + 1)
+    for column, (key, cfg) in zip(columns, LABS.items()):
+        with column:
+            st.subheader(cfg["title"])
+            st.caption(cfg["subtitle"])
+            if st.button("Open", key=f"pick_{key}", width="stretch"):
+                st.session_state[_LAB_STATE_KEY] = key
+                st.rerun()
+
+    with columns[-1]:
+        st.subheader("Both labs")
+        st.caption("Applicants who applied to both — map only")
+        if st.button("Open", key="pick_both", width="stretch"):
+            st.session_state[_LAB_STATE_KEY] = BOTH_LABS
+            st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +139,27 @@ def current_user_email() -> str:
     return ""
 
 
+def _filled(value) -> bool:
+    """True when the candidate actually answered this field.
+
+    A plain `if value` is not enough: unanswered cells arrive as pandas NA,
+    whose truth value raises TypeError rather than being falsey.
+    """
+    if isinstance(value, (list, tuple, set)):
+        return len(value) > 0
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+    return bool(value)
+
+
+def _show(value, default: str = "—") -> str:
+    """Value for display, or a dash when the candidate left it blank."""
+    return str(value) if _filled(value) else default
+
+
 def _table_height(n_rows: int, max_rows: int = 60) -> int:
     """Pixel height that shows every row instead of a short scrolling box.
 
@@ -115,12 +177,32 @@ def _table_height(n_rows: int, max_rows: int = 60) -> int:
 # and any manual resize is lost on the next rerun -- so widths are declared.
 _SCORES_COLUMN_WIDTHS = {
     "Candidate": "medium",
-    "Sofiia score": "small",
-    "Yurii score": "small",
     "Average": "small",
     "Advise CV path": "small",
     "Decision": "small",
 }
+
+
+def _interviewer_at(position: int) -> str | None:
+    """Who owns the sheet's "Interviewer N" column in this lab.
+
+    Read from score_columns, not from the voter list: EdgePose has three voters
+    but only two of them ran interviews, and the labs order them differently.
+    """
+    keys = LAB_CFG.get("score_columns") or list(INTERVIEWER_NAMES)
+    if position >= len(keys):
+        return None
+    return INTERVIEWER_NAMES.get(keys[position])
+
+
+def _score_label(position: int) -> str:
+    name = _interviewer_at(position)
+    return f"{name} score" if name else f"Interviewer {position + 1} score"
+
+
+def _comment_label(position: int) -> str:
+    name = _interviewer_at(position)
+    return f"{name} comment" if name else f"Interviewer {position + 1} comment"
 
 
 def _scores_column_config(frame: pd.DataFrame) -> dict:
@@ -133,8 +215,8 @@ def _scores_column_config(frame: pd.DataFrame) -> dict:
         if col in config:
             continue
         label = str(col).replace("\n", " ").strip()
-        if col in _SCORES_COLUMN_WIDTHS:
-            width = _SCORES_COLUMN_WIDTHS[col]
+        if col in _SCORES_COLUMN_WIDTHS or label.endswith("score"):
+            width = _SCORES_COLUMN_WIDTHS.get(col, "small")
         elif "comment" in label.lower():
             width = "large"
         else:
@@ -144,13 +226,38 @@ def _scores_column_config(frame: pd.DataFrame) -> dict:
 
 
 @st.cache_data
-def get_data() -> pd.DataFrame:
-    return load_merged()
+def get_data(lab: str) -> pd.DataFrame:
+    return load_merged(lab)
 
 
-df = get_data()
+# Nothing below renders until a lab is picked.
+if selected_lab() is None:
+    render_lab_picker()
+    st.stop()
 
-st.title("EdgePose Lab 2026 — Trainee Candidates")
+LAB = selected_lab()
+
+if st.button("← All labs"):
+    del st.session_state[_LAB_STATE_KEY]
+    st.rerun()
+
+# "Both labs" is map-only: it spans labs, so per-lab tabs don't apply.
+if LAB == BOTH_LABS:
+    st.title("IT-JIM R&D Labs — Applicants")
+    st.caption("Candidates who applied to both labs, and where each one got to.")
+    render_labs_map(BOTH_LABS, height=980)
+    st.stop()
+
+LAB_CFG = get_lab(LAB)
+INTERVIEWERS = LAB_CFG["interviewers"]
+INTERVIEWER_NAMES = LAB_CFG["interviewer_names"]
+ADMIN_EMAIL = LAB_CFG["admin_email"]
+FILTER_FIELDS = lab_filter_fields(LAB)
+MULTISELECT_COLUMNS = lab_multiselect_columns(LAB)
+
+df = get_data(LAB)
+
+st.title(f"{LAB_CFG['title']} — Trainee Candidates")
 st.caption(f"{len(df)} candidates in the response sheet")
 
 # ---------------------------------------------------------------------------
@@ -188,7 +295,7 @@ with tab_stats:
     st.subheader("Applicant map")
     # Height is fixed for the iframe, so it is tuned to the map's own layout:
     # too tall leaves a gap under it before the stats below.
-    render_labs_map("edge", height=980)
+    render_labs_map(LAB_CFG["map_lab"], height=980)
 
     st.divider()
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -205,10 +312,9 @@ with tab_stats:
             fig = px.histogram(df, x=skill_col, nbins=10, title=SKILL_LABELS[skill_col])
             fig.update_traces(marker_color=PRIMARY)
             fig.update_layout(height=280, margin=dict(t=40, b=10, l=10, r=10), xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     st.subheader("Categorical breakdown")
-    cat_cols = st.columns(3)
     categorical_fields = [
         ("english_level", "English level"),
         ("hours_per_week", "Hours/week available"),
@@ -217,30 +323,62 @@ with tab_stats:
         ("mobile_dev", "Mobile dev experience"),
         ("source", "How they heard about us"),
     ]
-    for i, (col_name, label) in enumerate(categorical_fields):
-        with cat_cols[i % 3]:
-            counts = df[col_name].value_counts()
-            fig = px.bar(x=counts.values, y=counts.index, orientation="h", title=label)
-            fig.update_traces(marker_color=PRIMARY)
-            fig.update_layout(height=300, margin=dict(t=40, b=10, l=10, r=10), xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig, use_container_width=True)
+    # Labs ask different questions, and a column the form never had is backfilled
+    # empty -- charting it would raise, so only fields with answers are drawn.
+    charts = []
+    for col_name, label in categorical_fields:
+        if col_name not in df.columns:
+            continue
+        counts = df[col_name].value_counts()
+        if counts.empty:
+            continue
+        charts.append((label, counts))
+
+    if not charts:
+        st.info("No categorical answers in this lab's form.")
+    else:
+        cat_cols = st.columns(3)
+        for i, (label, counts) in enumerate(charts):
+            with cat_cols[i % 3]:
+                fig = px.bar(
+                    x=list(counts.values), y=list(counts.index), orientation="h", title=label
+                )
+                fig.update_traces(marker_color=PRIMARY)
+                fig.update_layout(height=300, margin=dict(t=40, b=10, l=10, r=10), xaxis_title=None, yaxis_title=None)
+                st.plotly_chart(fig, width="stretch")
 
     st.subheader("Multi-select fields")
-    ms_cols = st.columns(3)
-    for i, col_name in enumerate(MULTISELECT_COLUMNS):
-        with ms_cols[i % 3]:
-            counts = explode_counts(df, col_name + "_list").head(10)
-            fig = px.bar(x=counts.values, y=counts.index, orientation="h", title=MS_LABELS[col_name])
-            fig.update_traces(marker_color=PRIMARY)
-            fig.update_layout(height=320, margin=dict(t=40, b=10, l=10, r=10), xaxis_title=None, yaxis_title=None, yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig, use_container_width=True)
+    ms_charts = []
+    for col_name in MULTISELECT_COLUMNS:
+        if col_name + "_list" not in df.columns:
+            continue
+        counts = explode_counts(df, col_name + "_list").head(10)
+        if counts.empty:
+            continue
+        ms_charts.append((col_name, counts))
+
+    if not ms_charts:
+        st.info("No multi-select answers in this lab's form.")
+    else:
+        ms_cols = st.columns(3)
+        for i, (col_name, counts) in enumerate(ms_charts):
+            with ms_cols[i % 3]:
+                fig = px.bar(
+                    x=list(counts.values),
+                    y=list(counts.index),
+                    orientation="h",
+                    title=ms_label(col_name),
+                )
+                fig.update_traces(marker_color=PRIMARY)
+                fig.update_layout(height=320, margin=dict(t=40, b=10, l=10, r=10), xaxis_title=None, yaxis_title=None, yaxis=dict(autorange="reversed"))
+                st.plotly_chart(fig, width="stretch")
 
     st.subheader("Top universities")
     uni_counts = df["university"].value_counts().head(12)
     fig = px.bar(x=uni_counts.values, y=uni_counts.index, orientation="h")
     fig.update_traces(marker_color=PRIMARY)
     fig.update_layout(height=380, margin=dict(t=10, b=10, l=10, r=10), xaxis_title="Candidates", yaxis_title=None, yaxis=dict(autorange="reversed"))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +391,7 @@ with tab_filters:
         "or Both both match); across fields it's AND. Leave a field empty to not filter on it."
     )
 
-    saved_filters = storage.load_state().get("filters", {})
+    saved_filters = storage.load_state(LAB).get("filters", {})
     for column, _label, _kind in FILTER_FIELDS:
         key = f"filter_{column}"
         if key not in st.session_state:
@@ -272,24 +410,24 @@ with tab_filters:
     current_filters = {column: st.session_state[f"filter_{column}"] for column, _, _ in FILTER_FIELDS}
 
     btn_save, btn_reset = st.columns([1, 1])
-    if btn_save.button("Save filters", use_container_width=True):
-        storage.save_filters({k: v for k, v in current_filters.items() if v})
+    if btn_save.button("Save filters", width="stretch"):
+        storage.save_filters({k: v for k, v in current_filters.items() if v}, LAB)
         st.success("Filters saved — they'll be pre-loaded next time the app starts.")
-    if btn_reset.button("Reset filters", use_container_width=True):
+    if btn_reset.button("Reset filters", width="stretch"):
         # Delete the widget-backed keys rather than assigning to them: Streamlit
         # forbids setting session_state for a key tied to an instantiated widget
         # (raises StreamlitAPIException). After deletion + rerun the multiselects
         # re-initialise empty from the now-cleared saved filters.
-        storage.save_filters({})
+        storage.save_filters({}, LAB)
         for column, _, _ in FILTER_FIELDS:
             st.session_state.pop(f"filter_{column}", None)
         st.rerun()
 
-    filtered_df = apply_filters(df, current_filters)
+    filtered_df = apply_filters(df, current_filters, LAB)
     st.metric("Candidates matching filters", f"{len(filtered_df)} / {len(df)}")
     st.dataframe(
         filtered_df[["full_name", "university", "english_level", "dl_framework"] + SKILL_COLUMNS],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -299,62 +437,101 @@ with tab_filters:
 # ---------------------------------------------------------------------------
 def render_candidate_card(row: pd.Series) -> None:
     st.markdown(f"### {row['full_name']}")
-    st.caption(f"{row.get('position') or '—'} · {row.get('affiliation') or '—'} · {row.get('city') or '—'}")
+    st.caption(f"{_show(row.get('position'))} · {_show(row.get('affiliation'))} · {_show(row.get('city'))}")
 
     meta1, meta2, meta3 = st.columns(3)
-    meta1.markdown(f"**Email:** {row.get('email') or '—'}")
-    meta1.markdown(f"**Phone:** {row.get('phone') or '—'}")
-    meta1.markdown(f"**Telegram:** {row.get('telegram') or '—'}")
-    meta2.markdown(f"**University:** {row.get('university') or '—'}")
-    meta2.markdown(f"**Education:** {row.get('education_details') or '—'}")
+    meta1.markdown(f"**Email:** {_show(row.get('email'))}")
+    meta1.markdown(f"**Phone:** {_show(row.get('phone'))}")
+    meta1.markdown(f"**Telegram:** {_show(row.get('telegram'))}")
+    meta2.markdown(f"**University:** {_show(row.get('university'))}")
+    meta2.markdown(f"**Education:** {_show(row.get('education_details'))}")
 
     li_url, li_text = normalize_link(row.get("linkedin"))
-    meta3.markdown(f"[LinkedIn]({li_url})" if li_url else f"**LinkedIn:** {li_text or '—'}")
+    meta3.markdown(f"[LinkedIn]({li_url})" if li_url else f"**LinkedIn:** {_show(li_text)}")
     rs_url, rs_text = normalize_link(row.get("resume_link"))
-    meta3.markdown(f"[Resume]({rs_url})" if rs_url else f"**Resume:** {rs_text or '—'}")
+    meta3.markdown(f"[Resume]({rs_url})" if rs_url else f"**Resume:** {_show(rs_text)}")
 
     st.markdown("**Skill ratings (1–10)**")
     skills = {SKILL_LABELS[c]: row[c] for c in SKILL_COLUMNS}
     fig = go.Figure(go.Bar(x=list(skills.values()), y=list(skills.keys()), orientation="h", marker_color=PRIMARY))
     fig.update_layout(height=220, margin=dict(t=10, b=10, l=10, r=10), xaxis_range=[0, 10])
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     tags1, tags2 = st.columns(2)
-    tags1.markdown(f"**English:** {row.get('english_level') or '—'}  \n**Hours/week:** {row.get('hours_per_week') or '—'}  \n**DL framework:** {row.get('dl_framework') or '—'}  \n**Trained DL models:** {row.get('trained_dl_models') or '—'}  \n**Read papers:** {row.get('read_papers') or '—'}")
-    tags2.markdown(f"**Domain interest:** {', '.join(row.get('domain_interest_list') or []) or '—'}  \n**Mobile dev:** {row.get('mobile_dev') or '—'}  \n**Source:** {row.get('source') or '—'}")
+    left_tags = [
+        ("English", row.get("english_level")),
+        ("Hours/week", row.get("hours_per_week")),
+        ("DL framework", row.get("dl_framework")),
+        ("Trained DL models", row.get("trained_dl_models")),
+        ("Read papers", row.get("read_papers")),
+    ]
+    tags1.markdown(
+        "  \n".join(f"**{label}:** {value}" for label, value in left_tags if _filled(value)) or "—"
+    )
+    domains = ", ".join(row.get("domain_interest_list") or [])
+    tags2.markdown(
+        f"**Domain interest:** {_show(domains)}  \n"
+        f"**Mobile dev:** {_show(row.get('mobile_dev'))}  \n"
+        f"**Source:** {_show(row.get('source'))}"
+    )
 
-    with st.expander("CV tasks / libraries / tools"):
-        st.markdown(f"**CV tasks:** {', '.join(row.get('cv_tasks_list') or []) or '—'}")
-        st.markdown(f"**CV/3D libraries:** {', '.join(row.get('cv_libraries_list') or []) or '—'}")
-        st.markdown(f"**Edge tools:** {', '.join(row.get('edge_tools_list') or []) or '—'}")
-        st.markdown(f"**Infra tools:** {', '.join(row.get('infra_tools_list') or []) or '—'}")
-        st.markdown(f"**Graphics/3D tools:** {', '.join(row.get('graphics_tools_list') or []) or '—'}")
+    # Domain questions differ per lab: EdgePose asked about CV/edge tooling,
+    # Audio about audio tasks and instruments. Only answered fields are shown.
+    tool_fields = [
+        ("cv_tasks_list", "CV tasks"),
+        ("cv_libraries_list", "CV/3D libraries"),
+        ("edge_tools_list", "Edge tools"),
+        ("infra_tools_list", "Infra tools"),
+        ("graphics_tools_list", "Graphics/3D tools"),
+        ("audio_tasks_list", "Audio tasks"),
+    ]
+    tool_lines = [
+        f"**{label}:** {', '.join(row.get(field) or [])}"
+        for field, label in tool_fields
+        if _filled(row.get(field))
+    ]
+    if _filled(row.get("instruments")):
+        tool_lines.append(f"**Musical instruments:** {row.get('instruments')}")
+    if tool_lines:
+        with st.expander("Tasks / libraries / tools"):
+            for line in tool_lines:
+                st.markdown(line)
 
-    with st.expander("Free-text answers"):
-        st.markdown(f"**CV/DL experience:**\n\n{row.get('cv_experience_text') or '—'}")
-        st.markdown(f"**Own projects:**\n\n{row.get('own_projects') or '—'}")
-        st.markdown(f"**Achievements:**\n\n{row.get('achievements') or '—'}")
-        st.markdown(f"**Motivation:**\n\n{row.get('motivation') or '—'}")
-        if row.get("comments"):
-            st.markdown(f"**Comments:**\n\n{row.get('comments')}")
+    text_fields = [
+        ("cv_experience_text", "CV/DL experience"),
+        ("audio_experience_text", "NLP & Audio DL experience"),
+        ("own_projects", "Own projects"),
+        ("achievements", "Achievements"),
+        ("motivation", "Motivation"),
+        ("comments", "Comments"),
+        ("thoughts", "Thoughts"),
+    ]
+    text_lines = [
+        (label, row.get(field)) for field, label in text_fields if _filled(row.get(field))
+    ]
+    if text_lines:
+        with st.expander("Free-text answers"):
+            for label, value in text_lines:
+                st.markdown(f"**{label}:**\n\n{value}")
 
 
 def render_pool_controls(row: pd.Series, current_key: str | None, is_admin: bool) -> None:
     st.markdown("**Interview pool decision**")
-    state = storage.load_state()
+    state = storage.load_state(LAB)
     entry = state["candidates"].get(row["candidate_key"], {"pool": {}, "notes": {}})
     pool = entry.get("pool", {})
     notes = entry.get("notes", {})
 
-    cols = st.columns(3)
-    for i, key in enumerate(["sofiia", "oleh", "yurii"]):
+    keys = list(INTERVIEWER_NAMES)
+    cols = st.columns(len(keys))
+    for i, key in enumerate(keys):
         name = INTERVIEWER_NAMES[key]
         editable = is_admin or current_key == key
         with cols[i]:
             checked = bool(pool.get(key, False))
             new_val = st.checkbox(name, value=checked, key=f"pool_{row['candidate_key']}_{key}", disabled=not editable)
             if new_val != checked:
-                storage.set_pool_flag(row["candidate_key"], key, new_val)
+                storage.set_pool_flag(row["candidate_key"], key, new_val, LAB)
 
             note_val = notes.get(key, "")
             new_note = st.text_area(
@@ -365,7 +542,7 @@ def render_pool_controls(row: pd.Series, current_key: str | None, is_admin: bool
                 height=90,
             )
             if new_note != note_val:
-                storage.set_note(row["candidate_key"], key, new_note)
+                storage.set_note(row["candidate_key"], key, new_note, LAB)
 
     if not current_key and not is_admin:
         st.caption("Sign in as an interviewer to record a pool decision.")
@@ -383,7 +560,7 @@ def render_pool_controls(row: pd.Series, current_key: str | None, is_admin: bool
             disabled=not (is_admin or current_key),
         )
         if new_scheduled != scheduled:
-            storage.set_scheduled_call(row["candidate_key"], new_scheduled)
+            storage.set_scheduled_call(row["candidate_key"], new_scheduled, LAB)
     with rec_col:
         rec_val = entry.get("recording", "")
         new_rec = st.text_input(
@@ -394,7 +571,7 @@ def render_pool_controls(row: pd.Series, current_key: str | None, is_admin: bool
             placeholder="Paste the call recording URL",
         )
         if new_rec != rec_val:
-            storage.set_recording_url(row["candidate_key"], new_rec)
+            storage.set_recording_url(row["candidate_key"], new_rec, LAB)
 
 
 def render_compare(pool_df: pd.DataFrame, default_name: str | None) -> None:
@@ -418,10 +595,10 @@ def render_compare(pool_df: pd.DataFrame, default_name: str | None) -> None:
                 )
             )
         fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 10])), height=450)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         table_cols = ["full_name", "university", "english_level", "hours_per_week", "dl_framework"] + SKILL_COLUMNS
-        st.dataframe(compare_df[table_cols], use_container_width=True, hide_index=True)
+        st.dataframe(compare_df[table_cols], width="stretch", hide_index=True)
     else:
         st.info("Select at least two candidates to compare.")
 
@@ -455,7 +632,7 @@ def render_vs_average(df_all: pd.DataFrame, row2: pd.Series) -> None:
             )
         )
         fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 10])), height=450, title=f"{row2['full_name']} vs. average")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with col_deltas:
         st.markdown("**Skill deltas vs. average**")
@@ -474,24 +651,51 @@ def render_vs_average(df_all: pd.DataFrame, row2: pd.Series) -> None:
     ]
     rows = []
     for col_name, label in categorical_fields:
+        if col_name not in df_all.columns:
+            continue
         mode_val = df_all[col_name].mode(dropna=True)
-        mode_val = mode_val.iloc[0] if not mode_val.empty else "—"
-        rows.append({"Field": label, "Candidate": row2.get(col_name) or "—", "Most common": mode_val})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        if mode_val.empty:
+            continue  # question this lab's form never asked
+        rows.append(
+            {
+                "Field": label,
+                "Candidate": _show(row2.get(col_name)),
+                "Most common": mode_val.iloc[0],
+            }
+        )
+    if rows:
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     st.subheader("Multi-select fields: candidate vs. top picks across all candidates")
-    ms_cols = st.columns(3)
-    for i, col_name in enumerate(MULTISELECT_COLUMNS):
-        with ms_cols[i % 3]:
-            candidate_items = set(row2.get(col_name + "_list") or [])
-            top_overall = explode_counts(df_all, col_name + "_list").head(6)
-            labels = top_overall.index.tolist()
-            colors = [PRIMARY if label in candidate_items else "#D8DEE9" for label in labels]
-            fig = px.bar(x=top_overall.values, y=labels, orientation="h", title=MS_LABELS[col_name])
-            fig.update_traces(marker_color=colors)
-            fig.update_layout(height=280, margin=dict(t=40, b=10, l=10, r=10), xaxis_title=None, yaxis_title=None, yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig, use_container_width=True)
-            st.caption(f"Highlighted = candidate's selections. Candidate picked: {', '.join(candidate_items) or '—'}")
+    comparisons = []
+    for col_name in MULTISELECT_COLUMNS:
+        if col_name + "_list" not in df_all.columns:
+            continue
+        top_overall = explode_counts(df_all, col_name + "_list").head(6)
+        if top_overall.empty:
+            continue
+        comparisons.append((col_name, top_overall))
+
+    if not comparisons:
+        st.info("No multi-select answers in this lab's form.")
+    else:
+        ms_cols = st.columns(3)
+        for i, (col_name, top_overall) in enumerate(comparisons):
+            with ms_cols[i % 3]:
+                candidate_items = set(row2.get(col_name + "_list") or [])
+                labels = top_overall.index.tolist()
+                colors = [PRIMARY if label in candidate_items else "#D8DEE9" for label in labels]
+                fig = px.bar(
+                    x=list(top_overall.values),
+                    y=labels,
+                    orientation="h",
+                    title=ms_label(col_name),
+                )
+                fig.update_traces(marker_color=colors)
+                fig.update_layout(height=280, margin=dict(t=40, b=10, l=10, r=10), xaxis_title=None, yaxis_title=None, yaxis=dict(autorange="reversed"))
+                st.plotly_chart(fig, width="stretch")
+                picked = ", ".join(candidate_items)
+                st.caption(f"Highlighted = candidate's selections. Candidate picked: {_show(picked)}")
 
 
 # ---------------------------------------------------------------------------
@@ -525,7 +729,7 @@ with tab_explorer:
 # Tab: Interview Pool
 # ---------------------------------------------------------------------------
 with tab_pool:
-    state = storage.load_state()
+    state = storage.load_state(LAB)
     rows = []
     for email, entry in state["candidates"].items():
         pool = entry.get("pool", {})
@@ -539,25 +743,25 @@ with tab_pool:
         match = df[df["candidate_key"] == email]
         name = match.iloc[0]["full_name"] if not match.empty else email
         votes = sum(1 for v in pool.values() if v)
-        rows.append(
-            {
-                "Candidate": name,
-                "Sofiia": "✅" if pool.get("sofiia") else "–",
-                "Oleh": "✅" if pool.get("oleh") else "–",
-                "Yurii": "✅" if pool.get("yurii") else "–",
-                "Scheduled call": "🟣" if scheduled else "–",
-                "Sofiia's note": notes.get("sofiia", ""),
-                "Oleh's note": notes.get("oleh", ""),
-                "Yurii's note": notes.get("yurii", ""),
-                "_votes": votes,
-            }
-        )
+        entry_row = {"Candidate": name}
+        for key, label in INTERVIEWER_NAMES.items():
+            entry_row[label] = "✅" if pool.get(key) else "–"
+        entry_row["Scheduled call"] = "🟣" if scheduled else "–"
+        for key, label in INTERVIEWER_NAMES.items():
+            entry_row[f"{label}'s note"] = notes.get(key, "")
+        entry_row["_votes"] = votes
+        rows.append(entry_row)
 
     if rows:
-        v1, v2, v3 = st.columns(3)
-        v1.metric("≥1 interviewer in favor", sum(1 for r in rows if r["_votes"] >= 1))
-        v2.metric("≥2 interviewers in favor", sum(1 for r in rows if r["_votes"] >= 2))
-        v3.metric("All 3 in favor", sum(1 for r in rows if r["_votes"] == 3))
+        total_interviewers = len(INTERVIEWER_NAMES)
+        thresholds = [t for t in range(1, total_interviewers + 1)]
+        metric_cols = st.columns(len(thresholds))
+        for col, t in zip(metric_cols, thresholds):
+            if t == total_interviewers and total_interviewers > 1:
+                label = f"All {t} in favor"
+            else:
+                label = f"≥{t} interviewer{'s' if t > 1 else ''} in favor"
+            col.metric(label, sum(1 for r in rows if r["_votes"] >= t))
         table = pd.DataFrame(rows).sort_values("_votes", ascending=False).drop(columns="_votes")
         # st.table, not st.dataframe: a dataframe always renders its own
         # scrolling viewport, however tall it is set. st.table writes a plain
@@ -576,17 +780,23 @@ with tab_scores:
     if not interviewed.empty:
         ic1, ic2 = st.columns(2)
         ic1.metric("Interviewed", len(interviewed))
-        ic2.metric("Avg interview score", f"{interviewed['average_score'].mean():.1f}")
+        # Audio's interviews were never scored, so the mean is NaN there; show a
+        # dash rather than the literal "nan", which reads like a failure.
+        mean_score = interviewed["average_score"].mean()
+        ic2.metric(
+            "Avg interview score",
+            "—" if pd.isna(mean_score) else f"{mean_score:.1f}",
+        )
         # Curated columns (see interview_display_columns); junk/duplicate sheet
         # columns are filtered out. Tidy up the messy multiline headers for
         # display only.
-        cols = interview_display_columns(interviewed)
+        cols = interview_display_columns(interviewed, LAB)
         scores = interviewed[cols].copy()
 
         # Recording links live in Firestore (the sheet buries them in a cell
         # hyperlink the API can't read). They are entered from the Candidate
         # Explorer; shown here, immediately before Decision.
-        rec_state = storage.load_state()["candidates"]
+        rec_state = storage.load_state(LAB)["candidates"]
         scores["Recording"] = [
             (rec_state.get(key) or {}).get("recording", "")
             for key in interviewed["candidate_key"]
@@ -601,20 +811,20 @@ with tab_scores:
         display = scores.rename(
             columns={
                 "full_name": "Candidate",
-                "interviewer_1_score": "Sofiia score",
-                "interviewer_2_score": "Yurii score",
+                "interviewer_1_score": _score_label(0),
+                "interviewer_2_score": _score_label(1),
                 "average_score": "Average",
                 "Advise CV Learing Path": "Advise CV path",
-                "Comment \nInterviewer 1\n(Sofiia)": "Sofiia comment",
-                "Comment \nInterviewer 2\n(Yura)": "Yurii comment",
+                "Comment \nInterviewer 1\n(Sofiia)": _comment_label(0),
+                "Comment \nInterviewer 2\n(Yura)": _comment_label(1),
                 # The sheet's plain (unsuffixed) variants of the same headings.
-                "Comment \nInterviewer 1": "Sofiia comment",
-                "Comment \nInterviewer 2": "Yurii comment",
+                "Comment \nInterviewer 1": _comment_label(0),
+                "Comment \nInterviewer 2": _comment_label(1),
             }
         )
         st.dataframe(
             display,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=_table_height(len(display)),
             column_config=_scores_column_config(display),
