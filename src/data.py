@@ -16,9 +16,15 @@ import pandas as pd
 import streamlit as st
 
 # Spreadsheet the EdgePose Lab 2026 response form writes into.
+# Kept as module-level names so existing call sites keep working; the per-lab
+# values now live in LABS below and are what the loaders actually read.
 SPREADSHEET_ID = "16Hv_tvcrzMi-Qbm8kTBfIQPzd4-gg7MCz394a7LfJQ8"
 CANDIDATES_SHEET = "Form responses 1"
 INTERVIEWS_SHEET = "Interviews"
+
+AUDIO_SPREADSHEET_ID = "1w1zXovxFd648nq9zqzUZbwe4FAJSNdq7-xTEV_r61zc"
+
+DEFAULT_LAB = "edge"
 
 # Applications trickle in during the day; re-read at most this often per server process.
 _CACHE_TTL_SECONDS = 300
@@ -114,6 +120,106 @@ FILTER_FIELDS = [
     ("graphics_tools", "3D / graphics tools", "multi"),
 ]
 
+# ---------------------------------------------------------------------------
+# Lab registry
+# ---------------------------------------------------------------------------
+# Each lab is a separate response spreadsheet with its own interviewers and its
+# own domain questions. The application core (skill ratings, names, links) is
+# identical across labs, so only the differences are listed here.
+#
+# "rename_extra" is merged over RENAME: it covers headings that differ between
+# labs (Audio's form writes "Email Address", EdgePose's writes "Email address")
+# plus each lab's domain-specific questions.
+
+AUDIO_RENAME_EXTRA = {
+    "Email Address": "email",
+    "Which audio tasks have you worked on previously?": "audio_tasks",
+    "Describe your experience with NLP & Audio DL tasks": "audio_experience_text",
+    "Do you play any musical instruments? If so, please list them. ": "instruments",
+    "Thougths": "thoughts",
+}
+
+AUDIO_MULTISELECT_COLUMNS = ["domain_interest", "audio_tasks"]
+
+# Audio's form never asked about CV tasks, edge/infra/3D tooling, papers or
+# DL-model training, so those fields are absent from its filter set.
+AUDIO_FILTER_FIELDS = [
+    ("english_level", "English level", "single"),
+    ("hours_per_week", "Hours/week available", "single"),
+    ("dl_framework", "DL framework", "single"),
+    ("mobile_dev", "Mobile dev experience", "single"),
+    ("university", "University", "single"),
+    ("domain_interest", "Domain interest", "multi"),
+    ("audio_tasks", "Audio tasks worked on", "multi"),
+]
+
+LABS = {
+    "edge": {
+        "key": "edge",
+        "title": "EdgePose Lab 2026",
+        "subtitle": "Computer Vision & Edge Deployment",
+        "spreadsheet_id": SPREADSHEET_ID,
+        "candidates_sheet": CANDIDATES_SHEET,
+        "interviews_sheet": INTERVIEWS_SHEET,
+        # Which dataset the embedded applicant map should open on.
+        "map_lab": "edge",
+        "interviewers": {
+            "sofia.kuzmenko@it-jim.com": "sofiia",
+            "oleh.leskiv@it-jim.com": "oleh",
+            "yurii.chyrka@it-jim.com": "yurii",
+        },
+        "interviewer_names": {"sofiia": "Sofiia", "oleh": "Oleh", "yurii": "Yurii"},
+        "admin_email": "sofia.kuzmenko@it-jim.com",
+        "rename_extra": {},
+        "multiselect_columns": MULTISELECT_COLUMNS,
+        "filter_fields": FILTER_FIELDS,
+        # Existing Firestore documents -- left untouched so current votes and
+        # notes stay exactly where they are.
+        "filters_doc": "filters",
+        "candidates_doc": "candidates",
+    },
+    "audio": {
+        "key": "audio",
+        "title": "Audio Lab 2026",
+        "subtitle": "Audio, Music & Speech AI",
+        "spreadsheet_id": AUDIO_SPREADSHEET_ID,
+        # Note the capital R -- Audio's tab really is named differently.
+        "candidates_sheet": "Form Responses 1",
+        "interviews_sheet": "Interviews",
+        "map_lab": "music",
+        # Only Yurii ran the Audio interviews.
+        "interviewers": {"yurii.chyrka@it-jim.com": "yurii"},
+        "interviewer_names": {"yurii": "Yurii"},
+        "admin_email": "sofia.kuzmenko@it-jim.com",
+        "rename_extra": AUDIO_RENAME_EXTRA,
+        "multiselect_columns": AUDIO_MULTISELECT_COLUMNS,
+        "filter_fields": AUDIO_FILTER_FIELDS,
+        "candidates_doc": "candidates_audio",
+        "filters_doc": "filters_audio",
+    },
+}
+
+
+def get_lab(lab: str | None = None) -> dict:
+    """Config for one lab; unknown keys fail loudly rather than silently."""
+    key = lab or DEFAULT_LAB
+    if key not in LABS:
+        raise ValueError(f"unknown lab: {key!r} (known: {', '.join(LABS)})")
+    return LABS[key]
+
+
+def lab_rename(lab: str | None = None) -> dict:
+    return {**RENAME, **get_lab(lab)["rename_extra"]}
+
+
+def lab_filter_fields(lab: str | None = None) -> list:
+    return get_lab(lab)["filter_fields"]
+
+
+def lab_multiselect_columns(lab: str | None = None) -> list:
+    return get_lab(lab)["multiselect_columns"]
+
+
 _PLACEHOLDER_LINKS = {"", "n/a", "-", ".", "none"}
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _BARE_DOMAIN_RE = re.compile(r"^[a-z0-9.-]+\.[a-z]{2,}(/\S*)?$", re.IGNORECASE)
@@ -148,9 +254,11 @@ def split_multiselect(value: object) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
-def apply_filters(df: pd.DataFrame, filter_state: dict[str, list[str]]) -> pd.DataFrame:
+def apply_filters(
+    df: pd.DataFrame, filter_state: dict[str, list[str]], lab: str | None = None
+) -> pd.DataFrame:
     mask = pd.Series(True, index=df.index)
-    for column, _label, kind in FILTER_FIELDS:
+    for column, _label, kind in lab_filter_fields(lab):
         selected = filter_state.get(column)
         if not selected:
             continue
@@ -182,7 +290,7 @@ def _sheets_service():
 
 
 @st.cache_data(ttl=_CACHE_TTL_SECONDS, show_spinner=False)
-def _read_sheet(sheet_name: str) -> pd.DataFrame:
+def _read_sheet(sheet_name: str, spreadsheet_id: str | None = None) -> pd.DataFrame:
     """Read one tab into a DataFrame, mimicking ``pd.read_excel``'s first-row-is-header behaviour.
 
     The API returns ragged rows -- trailing empty cells are omitted -- so short rows are padded
@@ -192,7 +300,11 @@ def _read_sheet(sheet_name: str) -> pd.DataFrame:
     result = (
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=sheet_name, valueRenderOption="UNFORMATTED_VALUE")
+        .get(
+            spreadsheetId=spreadsheet_id or SPREADSHEET_ID,
+            range=sheet_name,
+            valueRenderOption="UNFORMATTED_VALUE",
+        )
         .execute()
     )
     values = result.get("values", [])
@@ -207,15 +319,19 @@ def _read_sheet(sheet_name: str) -> pd.DataFrame:
     return df.replace("", pd.NA)
 
 
-def load_candidates() -> pd.DataFrame:
-    df = _read_sheet(CANDIDATES_SHEET)
-    df = df.rename(columns=RENAME)
+def load_candidates(lab: str | None = None) -> pd.DataFrame:
+    cfg = get_lab(lab)
+    rename = lab_rename(lab)
+    multiselect = cfg["multiselect_columns"]
+
+    df = _read_sheet(cfg["candidates_sheet"], cfg["spreadsheet_id"])
+    df = df.rename(columns=rename)
     df = df.dropna(how="all")
 
     # If a form question gets reworded, its RENAME entry stops matching and the
     # column silently disappears. Backfill anything expected but absent so the
     # app degrades to blank cells instead of crashing on first access.
-    expected = set(RENAME.values()) | set(SKILL_COLUMNS) | set(ORDINAL_MAPS) | set(MULTISELECT_COLUMNS)
+    expected = set(rename.values()) | set(SKILL_COLUMNS) | set(ORDINAL_MAPS) | set(multiselect)
     for col in expected:
         if col not in df.columns:
             df[col] = pd.NA
@@ -228,10 +344,19 @@ def load_candidates() -> pd.DataFrame:
     for col, mapping in ORDINAL_MAPS.items():
         df[col + "_score"] = df[col].map(mapping)
 
-    for col in MULTISELECT_COLUMNS:
+    for col in multiselect:
         df[col + "_list"] = df[col].apply(split_multiselect)
 
     df["candidate_key"] = df["email"].fillna("").str.strip().str.lower()
+
+    # A few people submitted the form twice. Keep the most recent submission so
+    # counts here match the applicant map (which is de-duplicated too) and one
+    # person is not reviewed as two candidates.
+    before = len(df)
+    df = df.drop_duplicates(subset=["full_name"], keep="last")
+    if len(df) != before:
+        df = df.reset_index(drop=True)
+
     return df.reset_index(drop=True)
 
 
@@ -244,6 +369,9 @@ INTERVIEW_REQUIRED = {
     "interviewer_1_score": ["interviewer 1 score"],
     "interviewer_2_score": ["interviewer 2 score"],
 }
+
+# Interview columns the app does arithmetic on; always coerced to numbers.
+INTERVIEW_NUMERIC_COLUMNS = ("average_score", "interviewer_1_score", "interviewer_2_score")
 
 # Headings duplicated from the candidates sheet; dropped on merge so pandas
 # doesn't suffix them with _x/_y.
@@ -274,6 +402,7 @@ INTERVIEW_SCORES_HIDE_SUBSTRINGS = (
     "resume",
     "current location",
     "call day",
+    "email",
 )
 
 
@@ -310,14 +439,15 @@ def _match_interview_columns(headers: list[str]) -> dict[str, str]:
     return resolved
 
 
-def load_interviews() -> pd.DataFrame:
+def load_interviews(lab: str | None = None) -> pd.DataFrame:
     """Read the Interviews tab, keeping every column the sheet has.
 
     Only the handful of fields the app computes on are renamed; the rest keep
     their original headings so new columns appear in the UI without a code
     change and none of them can be mistaken for another.
     """
-    df = _read_sheet(INTERVIEWS_SHEET)
+    cfg = get_lab(lab)
+    df = _read_sheet(cfg["interviews_sheet"], cfg["spreadsheet_id"])
     if df.empty:
         return pd.DataFrame(columns=["first_name", "last_name", "full_name"])
 
@@ -327,6 +457,14 @@ def load_interviews() -> pd.DataFrame:
         if col not in df.columns:
             df[col] = pd.NA
 
+    # Scores are typed by hand and the Average cell is a formula, so this column
+    # can hold blanks or spreadsheet errors ("#DIV/0!") alongside real numbers.
+    # Left as text, an object-dtype column makes .mean() raise TypeError and
+    # takes the whole tab down; coercing turns the bad cells into blanks.
+    for col in INTERVIEW_NUMERIC_COLUMNS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
     df = df.dropna(subset=["first_name", "last_name"], how="all")
     df["full_name"] = (df["first_name"].fillna("") + " " + df["last_name"].fillna("")).str.strip()
     return df.reset_index(drop=True)
@@ -334,10 +472,10 @@ def load_interviews() -> pd.DataFrame:
 
 # Set by load_merged(); read by interview_display_columns() so the scores tab
 # knows which columns came from the Interviews sheet.
-_interview_data_columns: set[str] = set()
+_interview_data_columns: dict[str, set[str]] = {}
 
 
-def load_merged() -> pd.DataFrame:
+def load_merged(lab: str | None = None) -> pd.DataFrame:
     """Candidates joined with whatever the Interviews tab currently holds.
 
     Every interview column is carried through rather than a fixed subset, so
@@ -345,21 +483,28 @@ def load_merged() -> pd.DataFrame:
     that duplicate candidate fields (name, links, city) are dropped to avoid
     pandas appending _x/_y suffixes on the join.
     """
-    candidates = load_candidates()
-    interviews = load_interviews()
+    lab_key = get_lab(lab)["key"]
+    candidates = load_candidates(lab_key)
+    interviews = load_interviews(lab_key)
+
+    # Audio's Interviews tab mirrors the entire application form, so anything
+    # that is a known form question is dropped here -- those values already come
+    # from the candidates side, and carrying them through would fill the Scores
+    # table with duplicated columns.
+    form_headings = set(lab_rename(lab_key))
 
     interview_cols = ["full_name"] + [
         c
         for c in interviews.columns
         if c not in INTERVIEW_OVERLAP
+        and c not in form_headings
         and not _is_hidden_interview_col(c)
         and c != "full_name"
     ]
 
     # Remember which columns are interview-side so the scores tab can list them
     # without re-reading the sheet.
-    global _interview_data_columns
-    _interview_data_columns = set(interview_cols)
+    _interview_data_columns[lab_key] = set(interview_cols)
 
     merged = candidates.merge(interviews[interview_cols], on="full_name", how="left")
     return merged
@@ -368,7 +513,7 @@ def load_merged() -> pd.DataFrame:
 
 
 
-def interview_display_columns(df: pd.DataFrame) -> list[str]:
+def interview_display_columns(df: pd.DataFrame, lab: str | None = None) -> list[str]:
     """Curated, ordered columns for the Interview Scores table.
 
     An explicit allow-list rather than "everything from the sheet": several sheet
@@ -390,12 +535,13 @@ def interview_display_columns(df: pd.DataFrame) -> list[str]:
         "Decision",
     ]
     # Keep only those that exist, in this order, without duplicates.
+    known = _interview_data_columns.get(get_lab(lab)["key"], set())
     ordered = [c for c in preferred if c in df.columns]
     # Append any other interview-side columns that aren't explicitly hidden,
     # so a newly added column still surfaces instead of silently vanishing.
     for c in df.columns:
         if (
-            c in _interview_data_columns
+            c in known
             and c not in ordered
             and not _is_hidden_interview_col(c)
             and c != "full_name"

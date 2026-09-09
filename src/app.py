@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import storage
+from map_view import render_labs_map
 from data import (
     ADMIN_EMAIL,
     FILTER_FIELDS,
@@ -97,6 +98,51 @@ def current_user_email() -> str:
     return ""
 
 
+def _table_height(n_rows: int, max_rows: int = 60) -> int:
+    """Pixel height that shows every row instead of a short scrolling box.
+
+    st.dataframe defaults to a fixed-height window; sized to the row count the
+    whole table is visible at once. Capped so a very long table still fits on
+    screen.
+    """
+    # Slightly generous: if the height is even a pixel short, st.dataframe adds
+    # its own vertical scrollbar, which is exactly what this avoids.
+    return 45 + 35 * max(1, min(n_rows, max_rows))
+
+
+# Score columns hold a number or two; comments hold sentences. Left to divide
+# the width evenly, the numeric columns stretch and the comments get squeezed,
+# and any manual resize is lost on the next rerun -- so widths are declared.
+_SCORES_COLUMN_WIDTHS = {
+    "Candidate": "medium",
+    "Sofiia score": "small",
+    "Yurii score": "small",
+    "Average": "small",
+    "Advise CV path": "small",
+    "Decision": "small",
+}
+
+
+def _scores_column_config(frame: pd.DataFrame) -> dict:
+    config: dict = {
+        "Recording": st.column_config.LinkColumn(
+            "Recording", display_text="Open recording", width="small"
+        )
+    }
+    for col in frame.columns:
+        if col in config:
+            continue
+        label = str(col).replace("\n", " ").strip()
+        if col in _SCORES_COLUMN_WIDTHS:
+            width = _SCORES_COLUMN_WIDTHS[col]
+        elif "comment" in label.lower():
+            width = "large"
+        else:
+            width = "medium"
+        config[col] = st.column_config.Column(label, width=width)
+    return config
+
+
 @st.cache_data
 def get_data() -> pd.DataFrame:
     return load_merged()
@@ -139,6 +185,12 @@ tab_stats, tab_filters, tab_explorer, tab_pool, tab_scores = st.tabs(
 # Tab: Overview & Stats
 # ---------------------------------------------------------------------------
 with tab_stats:
+    st.subheader("Applicant map")
+    # Height is fixed for the iframe, so it is tuned to the map's own layout:
+    # too tall leaves a gap under it before the stats below.
+    render_labs_map("edge", height=980)
+
+    st.divider()
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Candidates", len(df))
     c2.metric("Avg Python", f"{df['skill_python'].mean():.1f}")
@@ -497,7 +549,6 @@ with tab_pool:
                 "Sofiia's note": notes.get("sofiia", ""),
                 "Oleh's note": notes.get("oleh", ""),
                 "Yurii's note": notes.get("yurii", ""),
-                "Recording": recording,
                 "_votes": votes,
             }
         )
@@ -508,17 +559,11 @@ with tab_pool:
         v2.metric("≥2 interviewers in favor", sum(1 for r in rows if r["_votes"] >= 2))
         v3.metric("All 3 in favor", sum(1 for r in rows if r["_votes"] == 3))
         table = pd.DataFrame(rows).sort_values("_votes", ascending=False).drop(columns="_votes")
-        st.dataframe(
-            table,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                # Render the pasted recording URLs as clickable links.
-                "Recording": st.column_config.LinkColumn(
-                    "Recording", display_text="Open recording"
-                ),
-            },
-        )
+        # st.table, not st.dataframe: a dataframe always renders its own
+        # scrolling viewport, however tall it is set. st.table writes a plain
+        # HTML table, so the whole pool is visible and only the page scrolls.
+        # It also wraps long notes instead of clipping them to one line.
+        st.table(table.set_index("Candidate"))
     else:
         st.info("No interview-pool decisions recorded yet — set them from the Candidate Explorer tab.")
 
@@ -536,7 +581,24 @@ with tab_scores:
         # columns are filtered out. Tidy up the messy multiline headers for
         # display only.
         cols = interview_display_columns(interviewed)
-        display = interviewed[cols].rename(
+        scores = interviewed[cols].copy()
+
+        # Recording links live in Firestore (the sheet buries them in a cell
+        # hyperlink the API can't read). They are entered from the Candidate
+        # Explorer; shown here, immediately before Decision.
+        rec_state = storage.load_state()["candidates"]
+        scores["Recording"] = [
+            (rec_state.get(key) or {}).get("recording", "")
+            for key in interviewed["candidate_key"]
+        ]
+        ordered = [c for c in scores.columns if c != "Recording"]
+        if "Decision" in ordered:
+            ordered.insert(ordered.index("Decision"), "Recording")
+        else:
+            ordered.append("Recording")
+        scores = scores[ordered]
+
+        display = scores.rename(
             columns={
                 "full_name": "Candidate",
                 "interviewer_1_score": "Sofiia score",
@@ -545,8 +607,17 @@ with tab_scores:
                 "Advise CV Learing Path": "Advise CV path",
                 "Comment \nInterviewer 1\n(Sofiia)": "Sofiia comment",
                 "Comment \nInterviewer 2\n(Yura)": "Yurii comment",
+                # The sheet's plain (unsuffixed) variants of the same headings.
+                "Comment \nInterviewer 1": "Sofiia comment",
+                "Comment \nInterviewer 2": "Yurii comment",
             }
         )
-        st.dataframe(display, use_container_width=True, hide_index=True)
+        st.dataframe(
+            display,
+            use_container_width=True,
+            hide_index=True,
+            height=_table_height(len(display)),
+            column_config=_scores_column_config(display),
+        )
     else:
         st.info("No interviews recorded yet.")

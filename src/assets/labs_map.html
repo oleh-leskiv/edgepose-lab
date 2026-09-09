@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>IT-Jim R&D Labs 2026 — Applicant Map</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-card: #161b22;
+    --bg-card-2: #1c2128;
+    --bg-card-3: #21262d;
+    --border: #30363d;
+    --border-light: #3d4654;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --text-muted: #6e7681;
+    --accent: #ffd23f;
+    --accent-soft: rgba(255, 210, 63, 0.15);
+    --interview: #2ec4b6;
+    --interview-soft: rgba(46, 196, 182, 0.15);
+    --apps-0: #1c2128;
+    --apps-1: #2a3441;
+    --apps-2: #3a4a5e;
+    --apps-3: #4d6580;
+    --apps-4: #6b8caf;
+    --apps-5: #94b8db;
+    --apps-6: #c0d9f0;
+    /* Course buckets — applications stage */
+    --bucket-1st: #4a90e2;
+    --bucket-2nd: #5ba8d6;
+    --bucket-3rd: #6dbfca;
+    --bucket-4th: #87c997;
+    --bucket-5th: #c5b961;
+    --bucket-grad: #d18b3a;
+    --bucket-unknown: #5a6470;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(at 15% 5%, rgba(255, 210, 63, 0.04) 0px, transparent 50%),
+      radial-gradient(at 85% 95%, rgba(46, 196, 182, 0.04) 0px, transparent 50%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 28px 24px;
+    line-height: 1.5;
+    font-feature-settings: 'cv02', 'cv03', 'cv04';
+  }
+  .container { max-width: 1500px; margin: 0 auto; }
+
+  header { margin-bottom: 28px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 6px; }
+  h1 .accent { color: var(--accent); }
+  .subtitle { color: var(--text-dim); font-size: 14px; }
+
+  .stats-bar { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 18px; min-width: 150px; flex: 1; max-width: 220px;
+  }
+  .stat-card .label {
+    font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 6px; font-weight: 600;
+  }
+  .stat-card .value { font-size: 28px; font-weight: 700; line-height: 1; }
+  .stat-card.applications .value { color: var(--accent); }
+  .stat-card.interviewed .value { color: var(--interview); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(380px, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+  .map-panel {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 20px;
+    position: sticky; top: 20px;
+  }
+  .map-panel h2 {
+    font-size: 12px; color: var(--text-dim); font-weight: 700;
+    margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.1em;
+  }
+  .map-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+
+  .map-loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 400px; color: var(--text-muted); font-size: 13px; flex-direction: column; gap: 12px;
+  }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  svg.ukraine { width: 100%; height: auto; display: block; }
+  .region {
+    fill: var(--apps-0);
+    stroke: #0d1117;
+    stroke-width: 0.6;
+    cursor: pointer;
+    transition: fill 0.15s ease, stroke 0.15s ease, stroke-width 0.15s ease, filter 0.15s ease;
+  }
+  .region:hover { filter: brightness(1.18); }
+  .region.active {
+    stroke: var(--accent);
+    stroke-width: 1.8;
+    filter: drop-shadow(0 0 6px rgba(255, 210, 63, 0.5));
+  }
+  .region.interviewed-region {
+    stroke: var(--interview);
+    stroke-width: 1.2;
+  }
+  .region.interviewed-region.active {
+    stroke: var(--accent);
+    stroke-width: 1.8;
+  }
+  .region-count {
+    pointer-events: none;
+    font-size: 12px; font-weight: 800; fill: white; text-anchor: middle;
+    paint-order: stroke; stroke: rgba(0,0,0,0.7); stroke-width: 2.5px;
+  }
+  .interview-badge {
+    pointer-events: none;
+    font-size: 10px; font-weight: 800; fill: var(--interview); text-anchor: middle;
+    paint-order: stroke; stroke: rgba(13, 17, 23, 0.95); stroke-width: 3px;
+  }
+
+  .legend { margin-top: 16px; padding: 14px; background: var(--bg-card-2); border-radius: 10px; border: 1px solid var(--border); }
+  .legend-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+  .legend-row:last-child { margin-bottom: 0; }
+  .legend-row .label { font-weight: 600; color: var(--text); margin-right: 6px; min-width: 90px; }
+  .legend-scale { display: flex; gap: 4px; flex: 1; }
+  .legend-scale .item {
+    flex: 1; height: 18px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: rgba(255,255,255,0.85); font-weight: 700;
+  }
+  .legend-marker {
+    width: 16px; height: 16px; border-radius: 3px;
+    border: 2px solid var(--interview); background: transparent; flex-shrink: 0;
+  }
+
+  /* Right panel */
+  .info-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .panel-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-card-2); }
+  .tab {
+    flex: 1; padding: 14px 12px; text-align: center; cursor: pointer;
+    color: var(--text-dim); font-size: 12px; font-weight: 600;
+    border-bottom: 2px solid transparent; transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg-card); }
+
+  .panel-content { padding: 18px; max-height: calc(100vh - 220px); overflow-y: auto; }
+  .panel-content::-webkit-scrollbar { width: 8px; }
+  .panel-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .region-detail-header {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+    margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+  }
+  .region-detail-header h3 { font-size: 22px; font-weight: 700; line-height: 1.2; }
+  .region-detail-header h3[contenteditable] {
+    outline: none; border-radius: 4px; padding: 2px 4px; margin: -2px -4px;
+  }
+  .region-detail-header h3[contenteditable]:hover { background: var(--bg-card-2); }
+  .region-detail-header h3[contenteditable]:focus { background: var(--bg-card-2); box-shadow: 0 0 0 2px var(--accent); }
+  .region-totals { display: flex; gap: 6px; flex-shrink: 0; }
+  .pill { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .pill.apps { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,210,63,0.3); }
+  .pill.int { background: var(--interview-soft); color: var(--interview); border: 1px solid rgba(46,196,182,0.3); }
+
+  .uni-card {
+    background: var(--bg-card-2); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 12px; overflow: hidden;
+  }
+  .uni-header {
+    padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; cursor: pointer; user-select: none;
+  }
+  .uni-header:hover { background: rgba(255,255,255,0.02); }
+  .uni-name {
+    font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; flex: 1;
+    min-width: 0;
+  }
+  .uni-counts { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .count-edit {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--bg); border: 1px solid var(--border);
+    padding: 3px 8px; border-radius: 6px; font-size: 11px;
+  }
+  .count-edit .lbl {
+    color: var(--text-muted); text-transform: uppercase;
+    font-weight: 700; letter-spacing: 0.04em; font-size: 9px;
+  }
+  .count-edit input {
+    background: transparent; border: none; color: var(--text);
+    font-weight: 700; font-size: 13px; width: 30px; text-align: center;
+    outline: none; -moz-appearance: textfield; font-family: inherit;
+  }
+  .count-edit input::-webkit-outer-spin-button,
+  .count-edit input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .count-edit.apps { border-color: rgba(255,210,63,0.4); }
+  .count-edit.apps .lbl { color: var(--accent); }
+  .count-edit.int { border-color: rgba(46,196,182,0.4); }
+  .count-edit.int .lbl { color: var(--interview); }
+
+  .uni-students { border-top: 1px solid var(--border); padding: 6px 14px 12px; display: none; }
+  .uni-card.expanded .uni-students { display: block; }
+  .chev { transition: transform 0.2s ease; color: var(--text-muted); font-size: 10px; }
+  .uni-card.expanded .chev { transform: rotate(180deg); }
+
+  /* Course distribution chart */
+  .course-chart {
+    padding: 14px 4px 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+  .course-chart h5 {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.08em; font-weight: 700; margin-bottom: 12px;
+  }
+  .course-chart .row {
+    display: grid;
+    grid-template-columns: 70px 1fr 50px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+  .course-chart .row .row-label {
+    color: var(--text-dim); font-weight: 600; text-align: right;
+  }
+  .course-chart .row .row-bar {
+    display: flex; height: 18px; border-radius: 4px; overflow: hidden;
+    background: rgba(255,255,255,0.03); position: relative;
+  }
+  .course-chart .seg {
+    height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: rgba(13,17,23,0.85);
+    transition: filter 0.15s ease;
+  }
+  .course-chart .seg.applications { background: rgba(180, 200, 220, 0.55); }
+  .course-chart .seg.interviewed { background: var(--interview); color: var(--bg); }
+  .course-chart .seg:hover { filter: brightness(1.1); }
+  .course-chart .row .row-total {
+    color: var(--text); font-weight: 700; font-size: 12px; text-align: left;
+  }
+  .course-chart .row.empty .row-bar { background: rgba(255,255,255,0.02); }
+  .course-chart .row.empty .row-label { opacity: 0.4; }
+  .course-chart .row.empty .row-total { opacity: 0.4; color: var(--text-muted); }
+  .course-chart .legend {
+    display: flex; gap: 14px; margin-top: 12px; padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    font-size: 10px; color: var(--text-dim);
+  }
+  .course-chart .legend .key {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .course-chart .legend .key .swatch {
+    width: 10px; height: 10px; border-radius: 2px;
+  }
+  .course-chart .legend .key .swatch.applications { background: rgba(180, 200, 220, 0.55); }
+  .course-chart .legend .key .swatch.interviewed { background: var(--interview); }
+
+  /* "All universities" view: uni-card has chart shown automatically when expanded */
+  .all-unis .uni-card.expanded .course-chart { display: block; }
+  .all-unis .course-chart { display: none; }
+
+  .student {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 8px; padding: 10px 0; font-size: 12px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .student:last-child { border-bottom: none; }
+  .student-info { flex: 1; min-width: 0; }
+  .student-name {
+    color: var(--text); font-weight: 600; font-size: 13px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .student.interviewed .student-name { color: var(--interview); }
+  .student-name .check {
+    background: var(--interview); color: var(--bg);
+    width: 14px; height: 14px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 9px; font-weight: 800;
+    flex-shrink: 0;
+  }
+  .student-year { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+  .student-links { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .student-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--bg); border: 1px solid var(--border);
+    padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    color: var(--text-dim); text-decoration: none;
+    transition: all 0.15s ease; white-space: nowrap;
+  }
+  .student-link:hover { color: var(--text); border-color: var(--text-dim); }
+  .student-link.linkedin:hover { color: #0a66c2; border-color: #0a66c2; }
+  .company-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: rgba(255, 210, 63, 0.12); border: 1px solid rgba(255, 210, 63, 0.4);
+    color: var(--accent); border-radius: 5px;
+    padding: 1px 7px; font-size: 10px; font-weight: 700;
+    margin-left: 6px; vertical-align: middle;
+    white-space: nowrap;
+  }
+  .student-link.cv:hover { color: var(--accent); border-color: var(--accent); }
+  .student-link.recording { color: var(--interview); border-color: rgba(46,196,182,0.3); background: var(--interview-soft); }
+  .student-link.recording:hover { background: var(--interview); color: var(--bg); }
+  .student-link.missing { color: var(--text-muted); font-style: italic; cursor: default; opacity: 0.6; }
+  .student-link.missing:hover { border-color: var(--border); color: var(--text-muted); }
+
+  .company-row { display: flex; align-items: center; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+  .company-row .company-lbl { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
+  .company-input { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px; font-size: 11px; padding: 3px 7px; font-family: inherit; outline: none; transition: border-color 0.15s ease; }
+  .company-input:focus { border-color: var(--accent); }
+  .company-input.name-input { width: 130px; }
+  .company-input.url-input  { width: 185px; }
+  .company-link { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,210,63,0.1); border: 1px solid rgba(255,210,63,0.35); color: var(--accent); border-radius: 5px; padding: 3px 8px; font-size: 11px; font-weight: 700; text-decoration: none; transition: all 0.15s ease; }
+  .company-link:hover { background: rgba(255,210,63,0.2); }
+  .company-edit-btn { background: none; border: 1px dashed var(--border-light); border-radius: 5px; color: var(--text-muted); font-size: 10px; padding: 2px 7px; cursor: pointer; font-family: inherit; transition: all 0.15s ease; }
+  .company-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .company-editor-form { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .recording-row { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .student-year { display: flex; align-items: center; gap: 6px; }
+  .year-edit-btn { padding: 1px 6px; font-size: 10px; }
+  .year-select {
+    background: var(--bg); border: 1px solid var(--accent); color: var(--text);
+    border-radius: 5px; font-size: 11px; padding: 2px 6px; font-family: inherit;
+    outline: none; cursor: pointer;
+  }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 13px;
+  }
+  .empty-state .ico { font-size: 36px; opacity: 0.3; margin-bottom: 12px; }
+
+  .summary-section { margin-bottom: 20px; }
+  .summary-section h4 {
+    font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.08em; font-weight: 700; margin-bottom: 10px;
+  }
+  .summary-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 10px 12px; border-radius: 8px; margin-bottom: 4px;
+    cursor: pointer; transition: background 0.15s ease;
+    background: var(--bg-card-2);
+  }
+  .summary-row:hover { background: var(--bg-card-3); }
+  .summary-row .nm { font-size: 13px; color: var(--text); flex: 1; min-width: 0; }
+  .summary-row .nm strong { font-weight: 600; }
+  .summary-row .nm small { color: var(--text-muted); font-size: 11px; display: block; margin-top: 2px; }
+  .summary-row .nums { display: flex; gap: 6px; flex-shrink: 0; }
+
+  .reset-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    font-size: 12px; font-family: inherit; margin-top: 16px; transition: all 0.15s ease;
+  }
+  .reset-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  .footer-note {
+    margin-top: 24px; padding: 14px 18px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    font-size: 12px; color: var(--text-dim); line-height: 1.65;
+  }
+  .footer-note strong { color: var(--text); }
+  .footer-note kbd {
+    background: var(--bg-card-2); padding: 2px 6px; border-radius: 3px;
+    font-size: 11px; font-family: 'SF Mono', Monaco, Consolas, monospace; color: var(--accent);
+  }
+
+  .lab-switcher {
+    display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .lab-btn {
+    background: var(--bg-card); border: 1px solid var(--border);
+    color: var(--text-dim); border-radius: 8px; padding: 7px 16px;
+    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+    transition: all 0.18s ease;
+  }
+  .lab-btn:hover { border-color: var(--text-dim); color: var(--text); }
+  .lab-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .lab-btn.both-btn.active { background: #7c6af7; border-color: #7c6af7; color: #fff; }
+  .both-overview {
+    padding: 16px 0;
+  }
+  .both-overview h3 {
+    font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 14px;
+  }
+  .both-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+  }
+  .both-table th {
+    text-align: left; padding: 7px 10px; color: var(--text-muted);
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+    border-bottom: 1px solid var(--border); font-weight: 700;
+  }
+  .both-table td {
+    padding: 8px 10px; border-bottom: 1px solid var(--border-light);
+    vertical-align: top;
+  }
+  .both-table tr:last-child td { border-bottom: none; }
+  .both-table tr:hover td { background: var(--bg-card-2); }
+  .stage-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    border-radius: 5px; padding: 2px 7px; font-size: 10px; font-weight: 700;
+    white-space: nowrap;
+  }
+  .stage-badge.app { background: rgba(100,160,255,0.12); color: #64a0ff; border: 1px solid rgba(100,160,255,0.3); }
+  .stage-badge.int { background: var(--interview-soft); color: var(--interview); border: 1px solid rgba(46,196,182,0.3); }
+  .stage-badge.none { background: var(--bg-card-2); color: var(--text-muted); border: 1px solid var(--border); opacity:0.6; }
+  .both-lab-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  }
+  .both-lab-tag {
+    font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 2px 7px; border-radius: 4px;
+  }
+  .both-lab-tag.music { background: rgba(255,210,63,0.12); color: var(--accent); border: 1px solid rgba(255,210,63,0.3); }
+  .both-lab-tag.edge  { background: rgba(124,106,247,0.12); color: #7c6af7; border: 1px solid rgba(124,106,247,0.3); }
+  .edge-accent { color: #7c6af7 !important; }
+  .edge-accent-soft { border-color: rgba(124,106,247,0.4) !important; background: rgba(124,106,247,0.1) !important; }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="lab-switcher">
+    <button class="lab-btn" id="labBtnMusic" onclick="switchLab('music')">🎵 R&D Music Lab 2026</button>
+    <button class="lab-btn active" id="labBtnEdge" onclick="switchLab('edge')">📐 R&D EdgePose Lab 2026</button>
+    <button class="lab-btn both-btn" id="labBtnBoth" onclick="switchLab('both')">🔄 Both Labs</button>
+    <span id="fbStatus" title="Firebase sync status" style="margin-left:auto; align-self:center; font-size:11px; font-weight:600; padding:4px 10px; border-radius:6px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-muted);">☁ connecting…</span>
+  </div>
+  <h1 id="mainTitle">R&D EdgePose Lab <span class="accent edge-accent">2026</span> — Applicant Map</h1>
+  <div class="subtitle" id="mainSubtitle">It-Jim AI Trainee Program · EdgePose Lab — Computer Vision & Edge Deployment</div>
+
+  <div class="stats-bar">
+    <div class="stat-card applications">
+      <div class="label">Applications</div>
+      <div class="value" id="totalApps">104</div>
+    </div>
+    <div class="stat-card interviewed">
+      <div class="label">Interviewed</div>
+      <div class="value" id="totalInt">9</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Regions</div>
+      <div class="value" id="totalRegions">14</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Universities</div>
+      <div class="value" id="totalUnis">35</div>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+
+<div class="map-panel">
+  <h2>Map of Ukraine</h2>
+  <div class="map-hint">Click a region to view universities and applicants. Map outlines are loaded from a public GeoJSON dataset.</div>
+
+  <div id="mapWrap" class="map-wrap">
+    <div class="map-loading">
+      <div class="spinner"></div>
+      <div>Loading map outlines…</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-row">
+      <span class="label">Applications</span>
+      <div class="legend-scale">
+        <div class="item" style="background: var(--apps-0)">0</div>
+        <div class="item" style="background: var(--apps-1)">1</div>
+        <div class="item" style="background: var(--apps-2)">2-3</div>
+        <div class="item" style="background: var(--apps-3)">4-9</div>
+        <div class="item" style="background: var(--apps-4)">10-19</div>
+        <div class="item" style="background: var(--apps-5); color:#0d1117">20-29</div>
+        <div class="item" style="background: var(--apps-6); color:#0d1117">30+</div>
+      </div>
+    </div>
+    <div class="legend-row">
+      <span class="label">Interviews</span>
+      <div class="legend-marker"></div>
+      <span style="font-size:12px;">region with at least one interviewed candidate (green outline)</span>
+    </div>
+  </div>
+
+  <button class="reset-btn" onclick="resetEdits()">↺ Reset all edits to original data</button>
+</div>
+
+<div class="info-panel">
+  <div class="panel-tabs" id="panelTabs">
+    <div class="tab active" data-tab="region">Region detail</div>
+    <div class="tab" data-tab="all">All universities</div>
+    <div class="tab" data-tab="other">Foreign &amp; unspecified</div>
+    <div class="tab" data-tab="both" id="tabBoth" style="display:none;">🔄 Both Labs</div>
+  </div>
+  <div class="panel-content" id="panelContent">
+    <div class="empty-state">
+      <div class="ico">←</div>
+      <div>Click a region on the map to see its universities and applicants</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div class="footer-note">
+  <strong>How to use:</strong>
+  Click a university row to expand the list of applicants. Each applicant has links to their LinkedIn, CV/Resume,
+  and (for interviewed candidates) the interview recording. Missing items are explicitly marked.
+  Application and interview counts are editable — click the number fields to adjust.
+  Edits live in this session only; <kbd>↺ Reset</kbd> reverts to the original parsed data.
+</div>
+
+</div>
+
+<script type="module">
+// ============ FIREBASE PERSISTENCE ============
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue, set, get, child }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+// ↓↓↓ PASTE YOUR FIREBASE CONFIG HERE ↓↓↓
+const firebaseConfig = {
+  apiKey: "AIzaSyDMGcIt_sAv9hNWG6_ZhE0aZUTiNLQVgYI",
+  authDomain: "itjim-labs-map.firebaseapp.com",
+  databaseURL: "https://itjim-labs-map-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "itjim-labs-map",
+  storageBucket: "itjim-labs-map.firebasestorage.app",
+  messagingSenderId: "871457587390",
+  appId: "1:871457587390:web:5038c15fb13d9c433ddeef"
+};
+// ↑↑↑ PASTE YOUR FIREBASE CONFIG HERE ↑↑↑
+
+let fbDb = null;
+let fbReady = false;
+let fbLoadedOnce = false;   // becomes true after first edits snapshot (or offline fallback)
+let editsCache = {};   // { "lab__Name": { company, company_url, interview_url, bucket, year } }
+
+function fireEditsLoaded() {
+  fbLoadedOnce = true;
+  window.FB_LOADED = true;
+  window.dispatchEvent(new CustomEvent('fb-edits-loaded'));
+}
+
+// Expose a tiny API the main script calls
+window.FB = {
+  // Save one student's edited fields to Firebase
+  async saveEdit(lab, name, patch) {
+    const k = editKey(lab, name);
+    editsCache[k] = { ...(editsCache[k] || {}), ...patch, __key: k };
+    if (!fbReady || !fbDb) return; // offline / not configured → local only
+    try {
+      await set(ref(fbDb, 'edits/' + encodeKey(k)), editsCache[k]);
+      setFbStatus('☁ saved ✓', '#2ec4b6');
+    } catch (e) {
+      console.warn('Firebase save failed:', e);
+      setFbStatus('⚠ save blocked (check Rules)', '#ff6b6b');
+    }
+  },
+  // Get the current edit for a student (used when applying overlay)
+  getEdit(lab, name) { return editsCache[editKey(lab, name)] || null; },
+  isReady() { return fbReady; },
+  // Remove all edits for a lab (used by Reset)
+  async clearLab(lab) {
+    const prefix = lab + '__';
+    const toRemove = Object.keys(editsCache).filter(k => k.startsWith(prefix));
+    toRemove.forEach(k => delete editsCache[k]);
+    if (!fbReady || !fbDb) return;
+    try {
+      for (const k of toRemove) {
+        await set(ref(fbDb, 'edits/' + encodeKey(k)), null);
+      }
+    } catch (e) { console.warn('Firebase clearLab failed:', e); }
+  }
+};
+
+function editKey(lab, name) { return lab + '__' + name; }
+function encodeKey(k) { return k.replace(/[.#$/\[\]]/g, '_'); } // Firebase key-safe
+
+// Init Firebase + live listener
+(function initFirebase() {
+  const configured = !firebaseConfig.apiKey.startsWith('PASTE_');
+  if (!configured) {
+    console.info('Firebase not configured — edits will be local only.');
+    fireEditsLoaded();
+    return;
+  }
+  try {
+    const app = initializeApp(firebaseConfig);
+    fbDb = getDatabase(app);
+    fbReady = true;
+    setFbStatus('☁ syncing', '#2ec4b6');
+    // Live sync: whenever ANY edit changes, refresh cache + re-render
+    onValue(ref(fbDb, 'edits'), (snap) => {
+      const val = snap.val() || {};
+      editsCache = {};
+      for (const [encK, patch] of Object.entries(val)) {
+        editsCache[patch.__key || encK] = patch;
+      }
+      setFbStatus('☁ synced ✓', '#2ec4b6');
+      fireEditsLoaded();
+    }, (err) => {
+      console.warn('Firebase listener error:', err);
+      setFbStatus('⚠ read blocked (check Rules)', '#ff9f43');
+      fireEditsLoaded();
+    });
+  } catch (e) {
+    console.warn('Firebase init failed — local only:', e);
+    setFbStatus('⚠ offline (local only)', '#ff6b6b');
+    fireEditsLoaded();
+  }
+})();
+
+function setFbStatus(text, color) {
+  const el = document.getElementById('fbStatus');
+  if (el) {
+    el.textContent = text;
+    el.style.color = color || '';
+    el.style.borderColor = color || '';
+  }
+}
+</script>
+
+<script>
+// ============ APPLICANT DATA (parsed from Excel) ============
+const RAW_DATA_MUSIC = {"Lviv Oblast": {"apps": 22, "interviewed": 5, "unis": {"UCU - Ukrainian Catholic University": {"apps": 9, "interviewed": 4, "students": [{"name": "Iryna Voitsitska", "year": "4th year (graduating 2026)", "year_cat": "4_year", "linkedin": "http://www.linkedin.com/in/iryna-voitsitska", "resume": "https://drive.google.com/file/d/1zKZdGnmEmAhs8ectojt6uKuevJ7BZoZv/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "4th"}, {"name": "Ostap Pavlyshyn", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/ostap-pavlyshyn/", "resume": "https://drive.google.com/file/d/1IXTNygSgKRrb6TXcrXseAdZcw2gbiCSp/view?usp=sharing", "interviewed": true, "interview_url": "https://drive.google.com/file/d/13Dl7lBMBx6iGGLd0o0-onkDxtZHgR-2G/view?usp=sharing", "bucket": "3rd", "company": "Recruo", "company_url": "https://www.linkedin.com/company/recruo/"}, {"name": "Ivan Shynkarenko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/ivan-shynkarenko-928b38295?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app", "resume": "https://www.canva.com/design/DAGgPQYqTdA/p2t4GjBG5HFXLMRs3iKnCQ/view?utm_content=DAGgPQYqTdA&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=hceff612dcd", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Andrii Kravchuk", "year": "3rd year", "year_cat": "3_year", "linkedin": "http://www.linkedin.com/in/andrii-kravchuk-8b8900350", "resume": "https://drive.google.com/file/d/1_Sv_EmJfMkCmcDpwJXc-IWjVpUO6DQ3m/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Uliana Zbezhkhovska", "year": "PhD", "year_cat": "phd", "linkedin": "https://www.linkedin.com/in/uliana-zbezhkhovska-phd-5a1b949a/", "resume": "https://drive.google.com/file/d/1NnJ9HOyRGh7u4HtNI4q7ZSpHu_Ln376r/view?usp=sharing", "interviewed": true, "interview_url": "https://drive.google.com/file/d/1cd-beeaJJgLif0j1eavckMXWO74AfDiq/view?usp=sharing", "bucket": "graduates"}, {"name": "Viktoriia Koval", "year": "3rd year", "year_cat": "3_year", "linkedin": "http://linkedin.com/in/viktoriia-koval-41b3112a7", "resume": "https://drive.google.com/file/d/1AR_5Q35W8Y14He35UKapO-mTIW2f2cTS/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Sofiia Sampara", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/sofiia-sampara-00b7592b0/", "resume": "https://docs.google.com/document/d/1RZ8FxvZ7FKchj7BTp7EUx54XQxprJrp2UR-Mqb2Fxa4/edit?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "3rd"}, {"name": "Daryna Shevchuk", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/daryna-shevchuk-dsh/", "resume": "https://drive.google.com/file/d/1KqINXHINWW5WfcQTvRMrD-q3rAOm7fK7/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Anastasiia Havryliv", "year": "Bachelor graduate (2024)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/anastasiia-havryliv/", "resume": "https://drive.google.com/file/d/1WRVkOUdTerX0WlauJch-DPY6XE2EYpuF/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "Lviv Polytechnic National University": {"apps": 6, "interviewed": 1, "students": [{"name": "Demian Chumachenko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/damian-chumachenko-75146430b/", "resume": "https://drive.google.com/file/d/1Nr9NTfz5IVcD-0aBVIjz5Xh9DbIay3t1/view?usp=sharing", "interviewed": true, "interview_url": "https://drive.google.com/file/d/1A8PB9dKpEZacEGVi3TyGTmyAr5IK7qVJ/view?usp=sharing", "bucket": "3rd"}, {"name": "Zakhar Aleksandruk", "year": "1st year", "year_cat": "1_year", "linkedin": "https://www.linkedin.com/in/zakhar-aleksandruk-14427b396?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app", "resume": "https://drive.google.com/file/d/1Q9X_cXfdZ5w5pjxJ3ZMbDzn5hgtR3HaG/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "1st"}, {"name": "Ilona Klymenok", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": "http://linkedin.com/in/ilona-klymenok", "resume": "https://drive.google.com/file/d/1JQvl01UqSJ7FFTN_g_kDvbrdmFUzhabe/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Bohdan Shylo", "year": "Bachelor graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/bohdan-shylo-01517a296", "resume": "https://drive.google.com/file/d/1oywTVEtkSEO6SUAlZlw-keKrJ3Eh8vvS/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Alina Starchenko", "year": "4th year (graduating 2026)", "year_cat": "4_year", "linkedin": "http://www.linkedin.com/in/alina-starchenko-a6671a267", "resume": "https://docs.google.com/document/d/1cR0aEojlQ1Cz3ksKlwecTgJREJrD0GFY/edit?usp=sharing&ouid=102917289063154051624&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Denys Nesterovych", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/denys-nesterovych-ba6653367/", "resume": "https://drive.google.com/file/d/1n-czzx3gOVKpUGczTSNpKR6_42n6xurx/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}, "Ivan Franko National University of Lviv": {"apps": 6, "interviewed": 0, "students": [{"name": "Kateryna Tuhai", "year": "Bachelor graduate (2024)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/kateryna-tuhai", "resume": "https://drive.google.com/file/d/1rphGo9zatLwPL__J53u3QCQDltE0Mv0V/view?usp=share_link", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Dmytro Klepatskyi", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/dmytro-klepatskyi-158132280/", "resume": "https://drive.google.com/file/d/1rSp_mkYIVOEnM9S-i2NRhb5njIFrk9Th/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Kateryna Kapinus", "year": "Bachelor graduate (2023)", "year_cat": "graduated", "linkedin": null, "resume": "https://drive.google.com/file/d/1iwHe3QybEsHEX_hwKsMjCIREONNI1buv/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Nazar Hrubyi", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": null, "resume": "https://drive.google.com/file/d/1HsMchIWgRlpvTRMjdHpXzTU4BdCXrYCP/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Stanislav Osmilovskyi", "year": "Master's graduate (2012)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/stanislav-osmilovskyi-ba2b657b/", "resume": "https://drive.google.com/file/d/16PGYqKajKyn6hPV0Rk8Q922RsCgkt8DN/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Volodymyr Piniaha", "year": "Master's student", "year_cat": "master", "linkedin": "https://www.linkedin.com/in/volodymyr-piniaha-468161221/", "resume": "https://drive.google.com/file/d/1y9O7agryWLOzeLFPdrZxNLECodF2kwM9/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "Institute of Regional Research, NAS of Ukraine (Lviv)": {"apps": 1, "interviewed": 0, "students": [{"name": "Nazar Voronko", "year": "PhD", "year_cat": "phd", "linkedin": null, "resume": "https://drive.google.com/file/d/1US67bWxp1PFy6EcYQGs7-fCsOijYMhMS/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Odesa Oblast": {"apps": 4, "interviewed": 1, "unis": {"Odesa Mechnikov National University": {"apps": 4, "interviewed": 1, "students": [{"name": "Eugene Sotchenko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/eugene-sotchenko-2a2088281/", "resume": "https://drive.google.com/file/d/1Iz2j3JJMjgkVE4ZMJKuY2odGWx46OjHu/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Mariia Bieriestova", "year": "Bachelor graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/mariia-bieriestova-b58a821a7/", "resume": "https://drive.google.com/file/d/1oyn6xpv5v-CJWuHZ9JjJ4e0Huy5KPe5H/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "graduates"}, {"name": "Volodymyr Shymchenko", "year": "5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/me?trk=p_mwlite_feed-secondary_nav", "resume": "https://www.canva.com/design/DAG2UpqdIuo/JyrZCImEK5zaaWA6v_YOyg/edit", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Kateryna Nikolenko", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/kateryna-nikolenko-1070272a9/", "resume": "https://drive.google.com/file/d/1tFZGpcSXLnvGfHEFMUgnwoOrFAVuYC4q/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}}}, "Kyiv City": {"apps": 46, "interviewed": 4, "unis": {"Igor Sikorsky Kyiv Polytechnic Institute": {"apps": 20, "interviewed": 4, "students": [{"name": "Mykhailo Tymoshenko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/mykhailo-tymoshenko-665440385/", "resume": "https://drive.google.com/file/d/1Llpmyj0ZWp_b7Z057rMbI__E5C7JcpfD/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Oleksandr Riakhin", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/oleksandr-riakhin-28b439313/", "resume": "https://drive.google.com/drive/folders/1xTMzRsQdb6cCiHJZIHKveClFCQWERVBG?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Artem Latko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/artem-latko-97414a31b/", "resume": "https://drive.google.com/drive/folders/1_nhFYNYRoQPFYWDraKZr4vGA4DC65mU-?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "3rd"}, {"name": "Viktor Loshak", "year": "Bachelor graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/sam0ed/", "resume": "https://drive.google.com/file/d/1d5hMfO_al2ZS8xlOy_kICqOLE-EdvWcg/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Nikolai Domashenko", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/nikolai-domashenko-52a417294/", "resume": "https://drive.google.com/file/d/1ldwgLVDGYDPelshdPpR50B68VYBPAuVC/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "2nd"}, {"name": "Yuliia Herasymeniuk", "year": "Specialist degree (2014)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/yuliia-herasymeniuk/", "resume": "https://drive.google.com/file/d/13LFNsbYcqbcTDz0LE3QW9WGSX_HT1NEq/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Andrii Fokin", "year": "B.Sc. graduate", "year_cat": "graduated", "linkedin": null, "resume": "https://drive.google.com/file/d/1YxrI7s_8-Kh-Eee6DFUNPBt00WQ7GLLe/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Ivam Kechyk", "year": "4th year (graduating 2026)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/ivan-kechyk-b93707275?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app", "resume": "https://drive.google.com/file/d/1X5o8SFteJIJ8d_C4zt67QPrtzG4s6W_B/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Sabir Saiadov", "year": "Bachelor graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/sabir-saiadov/", "resume": "https://drive.google.com/file/d/1Z94Jr-091Kou3kCnD5z4QQM8wZrDKssG/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Victor Ivanov", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/victor-gr-9409111b4/", "resume": "https://drive.google.com/file/d/11KYzT7zCX75NNxsjA8FvuHJYE6mQSv32/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Illia Kvashuk", "year": "PhD", "year_cat": "phd", "linkedin": "https://www.linkedin.com/in/illia-kvashuk/", "resume": "https://drive.google.com/file/d/1CuzNp3M_fjz0ckXaeuyy0ZE8iKJnAfwx/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Anna Holovach", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/anna-holovach-09a352275/", "resume": "https://drive.google.com/file/d/1lYLUNPoeIY7riiNHEl9kWVXEKX4U7dsL/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Mariia Dodonova", "year": "Master's, year 2", "year_cat": "master", "linkedin": "http://www.linkedin.com/in/mariia-dodonova", "resume": "https://drive.google.com/file/d/1vypmOuERdyl3OMA72CsSfQOehVjhniGs/view?usp=sharing", "interviewed": true, "interview_url": "https://drive.google.com/file/d/18NmjvrEYmK9HuqYzCDyaPq9nCFJdpOR5/view?usp=sharing", "bucket": "graduates"}, {"name": "Viktoriia Stepaniuk", "year": "4th year (graduating 2026)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/viktoriia-stepaniuk-96a8b3301/", "resume": "https://drive.google.com/file/d/1uNDKxv-HRSEOcFTAzR5iPpD_nfJZEpj9/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Ihor Khomyak", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://docs.google.com/document/d/1Q4zYSI4C1xW1z2PPoM24dgl0iXtbhZPx/edit?usp=sharing&ouid=107192552252667325296&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Iryna Malii", "year": "Bachelor graduate (2025)", "year_cat": "graduated", "linkedin": null, "resume": "https://drive.google.com/file/d/1V5Ll2yg0tTgJi620Fo2eZ-Z3M6tzEy7p/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Serhiy Koval", "year": "Bachelor graduate (2023)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/serhiy-koval-401362370/", "resume": "https://drive.google.com/file/d/1DzNeMWDT4nN9mDMRQ5KgM6Cu90_tu_Ur/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Maksym Bobko", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": null, "resume": "https://drive.google.com/file/d/1x5WhAy4Wr-qUhIqMOa1XqTu8t4r_0hij/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Mykyta Barkalov", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/mykyta-barkalov-3b2b73356/", "resume": "https://drive.google.com/file/d/15fQHAD4KiJk-hC7ZZ5R2H0HaSWmxRcFy/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Uliana Husar", "year": "Master's, year 2", "year_cat": "master", "linkedin": "https://www.linkedin.com/in/uliana-husar-93747a234?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app", "resume": "https://drive.google.com/file/d/1FplLJ_C9QDlUDa20Dfe1L7vduPhsw-iv/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "graduates"}]}, "Taras Shevchenko National University of Kyiv": {"apps": 10, "interviewed": 0, "students": [{"name": "Andrii Shurshyn", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/andrii-shurshyn-b1b006305/", "resume": "https://drive.google.com/file/d/14-bZj7oKLGJHi-B4IYjDzUXYbX9Ifflk/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Nikita Tkachuk", "year": "Master's graduate (2024)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/nikita-tkachuk-98bb94243/", "resume": "https://drive.google.com/file/d/1hHAnJaT3eit9zcGigkD0OJ3avC3RSQSG/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Dmytro Kurdomanenko", "year": "Master's student (graduating 2026)", "year_cat": "master", "linkedin": "https://www.linkedin.com/in/dmytro-kurdomanenko-2a6768271/", "resume": "https://drive.google.com/file/d/16YZ-ylo9ZLVucSIUtRFkaOhSzctBGli1/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Oleksandr Kolko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/feed/", "resume": null, "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Maksym Vakoniuk", "year": "Bachelor (incomplete)", "year_cat": "unknown", "linkedin": null, "resume": "https://docs.google.com/document/d/1qGl9WxipKHnXDQYDPPyIWaiVpbZ_1xuR3YJaDWGyPF0/edit?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Serhii Voronstov", "year": "Master's graduate (2019)", "year_cat": "graduated", "linkedin": null, "resume": "https://docs.google.com/document/d/1TubWgSmBGVthv33HKLTxpy89CerOXyI0/edit?usp=sharing&ouid=112126282336749726278&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Denys Borysov", "year": "Master's graduate (2018)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/denysborysov", "resume": "https://drive.google.com/file/d/1m-2OA3z1OGZqVIx1EJLyfqcRquFRpd4H/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Oleksii Adamov", "year": "Master's graduate (2024)", "year_cat": "graduated", "linkedin": "http://www.linkedin.com/in/oleksii-adamov-59a2b7298", "resume": "https://drive.google.com/file/d/1T1EU-RZre5ESM-T7-wnF6prPGOc883fr/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Ihor Zakharov", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/zakharov-ihor", "resume": "https://drive.google.com/file/d/1AqPvMK_iK2xbdd0uVGo2bI_-_V8f4ZPW/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Anastasiia Mozghova", "year": "4th year (graduating 2026)", "year_cat": "4_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1LdRGmhpFqjJUJggCdwS7TMcwas-Pfz8z/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "State University of Trade and Economics (Kyiv)": {"apps": 1, "interviewed": 0, "students": [{"name": "Nadiia Chumak", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/nadiia-chumak-20a9a2381/", "resume": "https://drive.google.com/file/d/1LKx3bRXTAV7TB-Ylc_InaDDUNZaNdBmY/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Kyiv National Economic University": {"apps": 1, "interviewed": 0, "students": [{"name": "Vitalii Novyk", "year": "Bachelor graduate (2023)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/vitalii-novyk-a1801a1b1/", "resume": "https://www.linkedin.com/in/vitalii-novyk-a1801a1b1/", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "State University of Information and Communication Technologies (Kyiv)": {"apps": 2, "interviewed": 0, "students": [{"name": "Dmytro Patsora", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/dmytro-patsora-ab3039327/", "resume": "https://www.canva.com/design/DAG8DPEGw0I/xuDYdV0z2CnQKSJXAIuwiA/view?utm_content=DAG8DPEGw0I&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h8284e8c6c6", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Maksym Bondar", "year": "Incomplete", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/maksim-bondar-12b6b4173/", "resume": "https://docs.google.com/document/d/1xE7F3HLGl2Df68GfbNfOYDaKrMvu_ZET/edit?usp=sharing&ouid=114614055213721923863&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Kyiv College of Communications": {"apps": 1, "interviewed": 0, "students": [{"name": "Oleksandr Nedilko", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/oleksandr-nedilko-1a9a01389?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app", "resume": "https://drive.google.com/file/d/12yczw-ygRCdPE-OW6MpPAjCDYu4HttgZ/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Kyiv Professional College of Computer Technologies (KAI)": {"apps": 1, "interviewed": 0, "students": [{"name": "Daria Dementieva", "year": "Year not specified", "year_cat": "unknown", "linkedin": "http://www.linkedin.com/in/daria-dementieva-718850304", "resume": "https://drive.google.com/file/d/16GwHK0if-J9gxtxhs6d0iICyffFasOju/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Kyiv Aviation University": {"apps": 4, "interviewed": 0, "students": [{"name": "Yeva Bykova", "year": "3rd year", "year_cat": "3_year", "linkedin": "http://www.linkedin.com/in/yeva-bykova-2b4725211", "resume": "https://drive.google.com/file/d/1LPcfhS1C8Fs8NWOumqk9JqhA-SnlAwpx/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Anastasiia Petrunia", "year": "Bachelor graduate (2022)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/anastasiia-petrunia/", "resume": "https://drive.google.com/file/d/1dYuYlFbAOFvqIUfaasRYn0Ty7ETmT2ec/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Andrii Synelnyk", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/andrew-sinelnik/", "resume": "https://drive.google.com/file/d/1DGd9bRVY65XEQI4FcA6XLkZkKNSrAhnS/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Hryhorii Zatovskyi", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/hryhorii-zatovskyi-063879384/", "resume": "https://drive.google.com/file/d/1maVhDREUjqXFkXLAtcb6HSzA6kPNuIgL/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}, "Kyiv School of Economics": {"apps": 2, "interviewed": 0, "students": [{"name": "Serafym Podolyanchuk", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/serafym-podolianchuk-8938922aa/", "resume": "https://drive.google.com/file/d/1FNRTA-5ZKiyWYSJEZwFC1n7DVZGOIksQ/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Diana Kravchenko", "year": "1st year", "year_cat": "1_year", "linkedin": null, "resume": "https://www.canva.com/design/DAG2ErjDBuo/7qCE89CY3ahvcSWOv6UP4Q/edit?utm_content=DAG2ErjDBuo&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton", "interviewed": false, "interview_url": null, "bucket": "1st"}]}, "KROK University (Kyiv)": {"apps": 1, "interviewed": 0, "students": [{"name": "Oksana Kolisnyk", "year": "Bachelor graduate (2023)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/oksana-kolisnyk-0b9632247/", "resume": "https://www.canva.com/design/DAGiuuGCtaY/zOpzczGeBa9JkSwe5nof6w/edit", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "National University of Life and Environmental Sciences of Ukraine (Kyiv)": {"apps": 1, "interviewed": 0, "students": [{"name": "Ivan Danylenko", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": "http://linkedin.com/in/ivan-danylenko-796003268/", "resume": "https://surl.lt/bomkfr", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "Kyiv National University of Construction and Architecture": {"apps": 1, "interviewed": 0, "students": [{"name": "Dmytro Yovenko", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/dmytro-yovenko-9b251837a/", "resume": "https://drive.google.com/file/d/1M9oVBsInAbCDWQhkEk_f8yKpIGADl2aD/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "National University of Kyiv-Mohyla Academy": {"apps": 1, "interviewed": 0, "students": [{"name": "Alina Bazhura", "year": "Master's graduate (2013)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/alina-bazhura-77677991/", "resume": "https://drive.google.com/file/d/1M87-jPfpGekdLa4AIQO9VEyiw0WJWAtD/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Foreign: Canada": {"apps": 1, "interviewed": 0, "unis": {"York University (Toronto)": {"apps": 1, "interviewed": 0, "students": [{"name": "Nataliia Kobrii", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/nataliia-kobrii/", "resume": "https://drive.google.com/file/d/1g64VDmnC3S92WhxgbPJ0UiIcTzMPoUUj/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "2nd"}]}}}, "Foreign: Slovakia": {"apps": 1, "interviewed": 0, "unis": {"Technical University of Košice": {"apps": 1, "interviewed": 0, "students": [{"name": "Maxym Holets", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/maksym-holets-0b1322222/", "resume": "https://drive.google.com/drive/folders/1pdEwwkOIiWZiOImKbhLkz0147GixQj04?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Mykolaiv Oblast": {"apps": 1, "interviewed": 0, "unis": {"Mykolaiv State Agrarian University": {"apps": 1, "interviewed": 0, "students": [{"name": "Vitaliy Koval", "year": "Master's graduate (2014)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/vitaliykoval/", "resume": "https://drive.google.com/file/d/1FkDZ-_R32iL2BcnmbwmdGPOYFdw-Jk7d/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Kharkiv Oblast": {"apps": 11, "interviewed": 0, "unis": {"Kharkiv Polytechnic Institute (NTU KhPI)": {"apps": 5, "interviewed": 0, "students": [{"name": "Illia Hovorukha", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/illia-hovorukha-083b38295/", "resume": "https://drive.google.com/file/d/1bG2q-92NT5NHAfTUvLYfT8CgJfhakeKt/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Andrii Fortus", "year": "Bachelor graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/andrii-fortus-3a222b291/", "resume": "https://drive.google.com/file/d/113YRG5GZXBXrXEn6hz4WOo1LVVuMhcgA/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Vladyslav Oliinyk", "year": "2nd year", "year_cat": "2_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1VWtwtz_k8mGh9EMopPdaKnAgHKbOa9OV/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Oleksandr Novokhatskyi", "year": "Master's", "year_cat": "master", "linkedin": "http://www.linkedin.com/in/oleksandr-novokhatskyi", "resume": "https://drive.google.com/file/d/1OVZ4BD3JMK7KgyJ3AjKUogt-A2dPouyJ/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Bohdan Boklah", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/bohdan-boklah-742757370/", "resume": "https://drive.google.com/file/d/1IWm5amRU_LIU01FXLhdRhVFZafBocvRx/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "2nd"}]}, "V. N. Karazin Kharkiv National University": {"apps": 3, "interviewed": 0, "students": [{"name": "Anton Mykh", "year": "Graduated (2014)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/mak474757/", "resume": "https://drive.google.com/file/d/1afwJrMtOME0LFH0frUkIxyWNDNJu1Ffp/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Bohdan Zvorskyi", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/bohdan-zvorskyi-1939ba214?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3BngrddRwDSRa7FK4Gk1lVoA%3D%3D", "resume": "https://docs.google.com/document/d/1bEuV2s8k5SaEdIhlLpaGpDj_LtrdteK8/edit?usp=sharing&ouid=115093923761727568374&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Roman Ovsiannikov", "year": "Master's graduate (2024)", "year_cat": "graduated", "linkedin": null, "resume": "https://drive.google.com/file/d/1YMFet3HzIz37dHvHNGOdOH23rbQ9Uz5I/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "Kharkiv National University of Radio Electronics": {"apps": 3, "interviewed": 0, "students": [{"name": "Daniil Raptanov", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/daniilraptanov/", "resume": "https://drive.google.com/file/d/1_dKaXeF0UqrVxYV8XseGqCydPd0wLlDd/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Tymofii Kuzmenko", "year": "4th year (graduating 2026)", "year_cat": "4_year", "linkedin": "http://www.linkedin.com/in/tymofii-kuzmenko-60431b277", "resume": "https://docs.google.com/document/d/1-bKogKsBKbqs4uamFdsW97jOQFRgBOdzAJLLvPNsXuk/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Mariia Zameta", "year": "4th year (graduating 2026)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/mariia-zameta-b62230266/", "resume": "https://drive.google.com/file/d/1RnAKXtjV_FiEun1S5Y2wmdcDjPm6z5qN/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}}}, "Not specified": {"apps": 1, "interviewed": 0, "unis": {"Not specified": {"apps": 1, "interviewed": 0, "students": [{"name": "Oleh Makar", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/oleh-makar-45b788217?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app", "resume": "https://www.instagram.com/tv/CLfbZ-jlZv-/?igsh=MXBhdmg3bDJocHBjNw==", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Foreign: Austria": {"apps": 1, "interviewed": 0, "unis": {"TU Wien (Vienna)": {"apps": 1, "interviewed": 0, "students": [{"name": "Yaroslav Sazhchenko", "year": "Bachelor graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/%D1%8F%D1%80%D0%BE%D1%81%D0%BB%D0%B0%D0%B2-%D1%81%D0%B0%D0%B6%D1%87%D0%B5%D0%BD%D0%BA%D0%BE-2994b7300/?locale=en_US", "resume": "https://www.canva.com/design/DAG-HAvFx8M/IS7hQvBHatPUD8IvFpVj7w/edit?utm_content=DAG-HAvFx8M&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Zhytomyr Oblast": {"apps": 1, "interviewed": 0, "unis": {"Zhytomyr Polytechnic State University": {"apps": 1, "interviewed": 0, "students": [{"name": "Andrii Latash", "year": "Master's student", "year_cat": "master", "linkedin": "https://www.linkedin.com/in/andrii-latash-14a1632a0/", "resume": "https://drive.google.com/file/d/15xWBC1yl63QEACLuc32q2xcbRK8GNPUY/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Luhansk Oblast": {"apps": 1, "interviewed": 0, "unis": {"Starobilsk College": {"apps": 1, "interviewed": 0, "students": [{"name": "Viktoriia Didenko", "year": "Graduating 2026", "year_cat": "graduated", "linkedin": null, "resume": "https://drive.google.com/file/d/1ebBblMqVcpVxIPZVcJP0fBDJ3IEnNoQD/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Volyn Oblast": {"apps": 1, "interviewed": 0, "unis": {"Lesya Ukrainka Volyn National University": {"apps": 1, "interviewed": 0, "students": [{"name": "Feliks Kostukevych", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/feliks-kostukevych-44172396/", "resume": "https://drive.google.com/file/d/174Nryr-7TR6CED6hXYZm2m2h5ikM_z9x/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Ivano-Frankivsk Oblast": {"apps": 1, "interviewed": 0, "unis": {"Ivano-Frankivsk National Technical University of Oil and Gas": {"apps": 1, "interviewed": 0, "students": [{"name": "Liliana Zinych", "year": "Year not specified", "year_cat": "unknown", "linkedin": null, "resume": "https://drive.google.com/file/d/1sEJUPA2BVw4FNFmm-IEzfLXLMCinVxwv/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Vinnytsia Oblast": {"apps": 1, "interviewed": 0, "unis": {"Vinnytsia National Technical University": {"apps": 1, "interviewed": 0, "students": [{"name": "Taras Tarasovskiy", "year": "Master's student (graduating 2026)", "year_cat": "master", "linkedin": "https://www.linkedin.com/in/taras-tarasovskiy-bb9b6a305/", "resume": "https://drive.google.com/file/d/1PkiXSyV904fXiuz5Q2UTpbEmjOEuATZ8/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Dnipropetrovsk Oblast": {"apps": 3, "interviewed": 0, "unis": {"Dnipro University of Technology": {"apps": 1, "interviewed": 0, "students": [{"name": "Oleksandra Atamanchuk", "year": "Master's graduate (2025)", "year_cat": "graduated", "linkedin": "http://www.linkedin.com/in/oleksandra-atamanchuk", "resume": "https://drive.google.com/file/d/1NgNpQ4jKnxuL_5s2WLsvyGhYCuV-SH8z/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "Dnipro Academy of Music": {"apps": 1, "interviewed": 0, "students": [{"name": "Volodymyr Pylypenko", "year": "Graduating 2026", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/volodymyr-pylypenko-484907391?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app", "resume": "https://drive.google.com/drive/folders/1KTHohwXRxBvj9RF4oix-u8LlRP8zw6rL", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}, "Dnipro Polytechnic (NMU)": {"apps": 1, "interviewed": 0, "students": [{"name": "Karina Bielikova", "year": "Master's graduate (2021)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/karinabelikova/", "resume": "https://drive.google.com/file/d/1n8XRpzrReGGVIGN4PhIWfGdWlh8_GRMW/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Foreign: Israel": {"apps": 1, "interviewed": 0, "unis": {"Tel Aviv University": {"apps": 1, "interviewed": 0, "students": [{"name": "Imad Khaled", "year": "Year not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/emad-khaled-6b6528257/", "resume": "https://drive.google.com/file/d/166dSITBLSUfr1PvrNiZ2XPve9DJZUtA8/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Zakarpattia Oblast": {"apps": 4, "interviewed": 0, "unis": {"Uzhhorod National University": {"apps": 4, "interviewed": 0, "students": [{"name": "Yuliia Puha", "year": "3rd year", "year_cat": "3_year", "linkedin": "http://www.linkedin.com/in/yuliia-puha-a1b86a3a1", "resume": null, "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Ivan Kachmar", "year": "Master's graduate (2024)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/ivan-kachmar-b161b3337?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app", "resume": "https://drive.google.com/file/d/19KB0Gd4w_IsQ7vEhnjOu_9yayCya98xB/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Serhii Loshak", "year": "Bachelor graduate (2025)", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/serhii-loshak-90a703377/", "resume": "https://drive.google.com/file/d/1qTuprbomgqig85zcK6q0XVu_QWAdJK_x/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Yuliia Trofymenko", "year": "3rd year", "year_cat": "3_year", "linkedin": "http://www.linkedin.com/in/trofymenko", "resume": "https://drive.google.com/file/d/1ipqF5rHqYoTWTxYAl6pRMggM2op-0Kp6/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}}}, "Donetsk Oblast": {"apps": 1, "interviewed": 0, "unis": {"Mariupol Mechanical-Metallurgical College": {"apps": 1, "interviewed": 0, "students": [{"name": "Alona Zhluktarova", "year": "College graduate", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/me?trk=p_mwlite_feed-secondary_nav", "resume": null, "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Zaporizhzhia Oblast": {"apps": 1, "interviewed": 0, "unis": {"Zaporizhzhia Polytechnic National University": {"apps": 1, "interviewed": 0, "students": [{"name": "Iryna Kaplia", "year": "Master's graduate (2008)", "year_cat": "graduated", "linkedin": "http://www.linkedin.com/in/iryna-kaplia-804a4917", "resume": "https://drive.google.com/file/d/1EJsSAduHoutdYnOp69-PJC_n6etFyHEo/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}]}}}, "Foreign: Poland": {"apps": 1, "interviewed": 0, "unis": {"Kozminski University (Warsaw)": {"apps": 1, "interviewed": 0, "students": [{"name": "Mykola Bohatyrenko", "year": "4th year (graduating 2026)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/mykola-bohatyrenko-604427328/", "resume": "https://drive.google.com/file/d/1V9SKvP-ke67gLIKKUY4tG21oC9VUGi-x/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}}}};
+
+// Mapping: oblast name in our data -> name(s) in GeoJSON properties (covering EN + UK variants)
+const REGION_NAME_MAP = {
+  "Kyiv City":            ["Kyiv", "Kyiv City", "Kiev", "м.Київ", "Київ", "Kyivska", "Kyivs'ka oblast", "Київська область"],
+  "Lviv Oblast":          ["Lviv Oblast", "Lvivska", "Lvivs'ka oblast", "Львівська область"],
+  "Kharkiv Oblast":       ["Kharkiv Oblast", "Kharkivska", "Kharkivs'ka oblast", "Харківська область"],
+  "Odesa Oblast":         ["Odesa Oblast", "Odessa Oblast", "Odeska", "Odes'ka oblast", "Одеська область"],
+  "Zakarpattia Oblast":   ["Zakarpattia Oblast", "Zakarpatska", "Zakarpats'ka oblast", "Закарпатська область"],
+  "Dnipropetrovsk Oblast":["Dnipropetrovsk Oblast", "Dnipropetrovska", "Dnipropetrovs'ka oblast", "Дніпропетровська область"],
+  "Mykolaiv Oblast":      ["Mykolaiv Oblast", "Mykolaivska", "Mykolayivs'ka oblast", "Миколаївська область"],
+  "Zhytomyr Oblast":      ["Zhytomyr Oblast", "Zhytomyrska", "Zhytomyrs'ka oblast", "Житомирська область"],
+  "Luhansk Oblast":       ["Luhansk Oblast", "Luhanska", "Luhans'ka oblast", "Луганська область"],
+  "Volyn Oblast":         ["Volyn Oblast", "Volynska", "Volyns'ka oblast", "Волинська область"],
+  "Ivano-Frankivsk Oblast":["Ivano-Frankivsk Oblast", "Ivano-Frankivska", "Ivano-Frankivs'ka oblast", "Івано-Франківська область"],
+  "Vinnytsia Oblast":     ["Vinnytsia Oblast", "Vinnytska", "Vinnyts'ka oblast", "Вінницька область"],
+  "Donetsk Oblast":       ["Donetsk Oblast", "Donetska", "Donets'ka oblast", "Донецька область"],
+  "Zaporizhzhia Oblast":  ["Zaporizhzhia Oblast", "Zaporizka", "Zaporiz'ka oblast", "Запорізька область"],
+  "Rivne Oblast":         ["Rivne Oblast", "Rivnenska", "Rivnens'ka oblast", "Рівненська область"],
+  "Chernihiv Oblast":     ["Chernihiv Oblast", "Chernihivska", "Chernihivs'ka oblast", "Чернігівська область"],
+  "Sumy Oblast":          ["Sumy Oblast", "Sumska", "Sums'ka oblast", "Сумська область"],
+  "Poltava Oblast":       ["Poltava Oblast", "Poltavska", "Poltavs'ka oblast", "Полтавська область"],
+  "Cherkasy Oblast":      ["Cherkasy Oblast", "Cherkaska", "Cherkas'ka oblast", "Черкаська область"],
+  "Kirovohrad Oblast":    ["Kirovohrad Oblast", "Kirovohradska", "Kirovohrads'ka oblast", "Кіровоградська область"],
+  "Kherson Oblast":       ["Kherson Oblast", "Khersonska", "Khersons'ka oblast", "Херсонська область"],
+  "Khmelnytskyi Oblast":  ["Khmelnytskyi Oblast", "Khmelnytska", "Khmel'nyts'ka oblast", "Хмельницька область"],
+  "Ternopil Oblast":      ["Ternopil Oblast", "Ternopilska", "Ternopil's'ka oblast", "Тернопільська область"],
+  "Chernivtsi Oblast":    ["Chernivtsi Oblast", "Chernivetska", "Chernivets'ka oblast", "Чернівецька область"],
+};
+
+// All Ukrainian regions for full-map rendering (including ones with no apps)
+const ALL_REGIONS_EN = [
+  "Kyiv City","Lviv Oblast","Kharkiv Oblast","Odesa Oblast","Zakarpattia Oblast",
+  "Dnipropetrovsk Oblast","Mykolaiv Oblast","Zhytomyr Oblast","Luhansk Oblast","Volyn Oblast",
+  "Ivano-Frankivsk Oblast","Vinnytsia Oblast","Donetsk Oblast","Zaporizhzhia Oblast",
+  "Rivne Oblast","Kyiv Oblast","Chernihiv Oblast","Sumy Oblast","Poltava Oblast",
+  "Cherkasy Oblast","Kirovohrad Oblast","Kherson Oblast","Khmelnytskyi Oblast",
+  "Ternopil Oblast","Chernivtsi Oblast","Crimea","Sevastopol"
+];
+
+// Reverse lookup table: any name in GeoJSON -> our canonical English name
+const NAME_LOOKUP = {};
+for (const [canon, variants] of Object.entries(REGION_NAME_MAP)) {
+  variants.forEach(v => NAME_LOOKUP[v.toLowerCase()] = canon);
+}
+
+const RAW_DATA_EDGE = {"Lviv Oblast": {"apps": 41, "interviewed": 8, "unis": {"Lviv Polytechnic National University": {"apps": 22, "interviewed": 8, "students": [{"name": "Oleh Sokal", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://drive.google.com/file/d/13a5U9dzUJZ0uIprUim36uJwvI_NR4qP1/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "3rd"}, {"name": "Yaroslav Hnatiuk", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/yaroslav-hnatiuk-813271356/", "resume": "https://docs.google.com/document/d/1phC_vlg7tU3LjvoO8Fd9FhM6625ay82JSOttwsjFmNY/edit?tab=t.0", "interviewed": true, "interview_url": null, "bucket": "3rd"}, {"name": "Anna Vechirska", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/anna-v-423401293", "resume": "https://drive.google.com/file/d/199m6WxRxFKW-cfBZAxFP_7muKfd9056a/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Viktor Zozulia", "year": "5th year", "year_cat": "5_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1w9WNnwbFJATu1skAx3-nvSQyW9sraX4C/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Anzhelika Razumna", "year": "5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/anzhelika-razumna-b449832b5?utm_source=share_via&utm_content=profile&utm_medium=member_android", "resume": "https://drive.google.com/file/d/1IxqD507qoZBXyhaBfVMHyu6jrQD6Wolo/view?usp=drivesdk", "interviewed": true, "interview_url": null, "bucket": "5th"}, {"name": "Viktoriia Kyrychuk", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/viktoriia-kyrychuk-oi/", "resume": "https://drive.google.com/file/d/1Uoe9lKmhmRZW9XPLbBfzso1x5hIJAs4l/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Volodymyr Moisieiev", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/volodymyr-moisieiv-929230230/", "resume": "https://drive.google.com/file/d/1hm8HPEHwUXMuxMDJjbFqrQfNpfoCQRjn/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Mykola Kryvoruchko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/mykola-kryvoruchko-2726362b4/", "resume": "https://drive.google.com/file/d/19gMjOuD-CN3ujY8jQvjBrVQX2F_Lip0I/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "unknown"}, {"name": "Віктор Макозюк", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/viktor-makoziuk-3994aa321/", "resume": "https://drive.google.com/file/d/1yyMbFPwlM7YZ2ebv28DYgOilVqE7oyen/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "4th"}, {"name": "Yustyn Riznyk", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/yustyn-riznyk-58830a247", "resume": "https://drive.google.com/drive/folders/1rQSolh87qgsnyFJdcY5XxhfsPEc_D74l", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "IVAN OPALINSKYI", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://linkedin.com/in/ivan-opalinskyi", "resume": "https://drive.google.com/file/d/1x7cDhrKyc6y5JdmoDQhe39bIDoGQtMQs/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Viktoriia Bulatova", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/viktoriia-bulatova-a0497136a/", "resume": "https://drive.google.com/drive/folders/1BaDi5MXTI6CDAYceLg-ve-XJ5tN2JDo3?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "5th"}, {"name": "Yana Kurman", "year": "2nd year", "year_cat": "2_year", "linkedin": null, "resume": "https://docs.google.com/document/d/1dO724vj-W3zNsv0AI0Zn3T3CbIiKe9sHCjCN0nU53uw/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Dmytro Kipen", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/dmytro-kipen/", "resume": "https://drive.google.com/drive/folders/1so3Sn5OmSsW2rE1rNaDrlpsEtR8Aowvc?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Vitaliy Staryk", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/starik1500/", "resume": "https://drive.google.com/file/d/1wqZ9wvEaduFS5vyoWtE4cxz5moxaqPjk/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Sofiia Manko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/sofiia-manko-2a584032b/?skipRedirect=true", "resume": "https://drive.google.com/file/d/1ZoRlCQIwlweObozhpalfohFHaPcIwfib/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "3rd"}, {"name": "Vitali Shubak", "year": "4th year", "year_cat": "4_year", "linkedin": "https://\"N/A\"", "resume": "https://docs.google.com/document/d/1mjOIhhSRFs6DHbr9o13qeLm1XaREleIH/edit?usp=drive_link&ouid=111456467294407002504&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Vita Mostova", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/vita-mostova-ai", "resume": "https://drive.google.com/file/d/1yMVDz-WzY0Ak0CIedZDb63xj1AqvVDLR/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Ivan Ventyk", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/iventyk/", "resume": "https://drive.google.com/file/d/19XRLdilllBqaz3hwrUhxcW03EFCRCTvv/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Sviatoslav Romaniv", "year": "4th year", "year_cat": "4_year", "linkedin": "https://\"N/A\"", "resume": "https://drive.google.com/file/d/1B3oqnuB0yxoFaDLRrRn_tP_J5lbU6C5-/view", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Sofiia Pasichko", "year": "4th year", "year_cat": "4_year", "linkedin": "https://ua.linkedin.com/in/sofiia-pasichko-5a349332b", "resume": "https://drive.google.com/file/d/1w_8l0HRDtWGftkwhOOo-uBdkMaaiYu8v/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Yuliia Salishcheva", "year": "4th year", "year_cat": "4_year", "linkedin": "https://linkedin.com/in/yuliia-salishcheva-808789317", "resume": "https://canva.link/slb6yz747rg44be", "interviewed": true, "interview_url": null, "bucket": "4th"}]}, "Lviv National Medical University 'Danylo Halycky": {"apps": 1, "interviewed": 0, "students": [{"name": "Roman Pelenychko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/roman-pelenychko-377125134/", "resume": "https://drive.google.com/file/d/1kfaNvvLMyz4GD2LDQ9R5VrHklnPPrpVG/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Ivan Franko National University of Lviv": {"apps": 14, "interviewed": 0, "students": [{"name": "Olha Kozhushko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/olha-kozhushko/", "resume": "https://drive.google.com/file/d/1I0E-d3gP81ItL-kNy4P40c8-ojk2wzyM/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Alona Saienko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/alona-saienko-8ba510292/", "resume": "https://drive.google.com/file/d/1Kl84KoMqQfZHmwI3mRm-unFI0J1O-8P8/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Khrystyna Pavlivets", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/khrystyna-pavlivets", "resume": "https://drive.google.com/file/d/1Zx-i_epFt3_F9vjOHDs_uoY3o_hgIHpr/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Дима Федоров", "year": "Not specified", "year_cat": "unknown", "linkedin": null, "resume": "https://drive.google.com/file/d/1SkosP5ZxSxZd3Mjti5WiekJDomZBOsLy/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Roman Shypka", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/roman-shypka-371989397/", "resume": "https://docs.google.com/document/d/1vk6f2Hi8uxmgMTIEfAICQd6GZUGlrPq5KiPPtHwYulU/edit?tab=t.0#heading=h.tnpdv29ok6p6", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Ivanna Fedko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/ivanna-teslik-74411a196", "resume": "https://docs.google.com/document/d/1w_-ZD6TdWnyRXh7r_fss4YZSnpbLaqAy_F6t1GFrGUQ/edit?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Roksolana Senkiv", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1t8bCfsQTiu0fgzjM_6BjCuapflSR0c2r/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Nikita Grinyov", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/nikita-grinyov-963a40370/", "resume": "https://drive.google.com/file/d/1pAARBS0uvQZqDPBhhEOAAddSx2LWUoVq/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Andrew Khromovych", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/andrew-khromovych-8b8325316/", "resume": "https://drive.google.com/file/d/1XP9-UsGbzmq2TNxT1PbktsS6X0BODQsk/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Nazar Hrubyi", "year": "Master's graduate", "year_cat": "graduated", "linkedin": null, "resume": "https://drive.google.com/file/d/1Bh1v1rErbPosXBkv3p4-4pkuIQG5Z7E6/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Marta Zakharkiv", "year": "Master's graduate", "year_cat": "graduated", "linkedin": "https://www.linkedin.com/in/marta-zakharkiv-6275842aa/?locale=uk", "resume": "https://drive.google.com/file/d/1Qa3WL8NA52eH-nT9OAPNyUzrXIXG5yTy/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "graduates"}, {"name": "Daryna Lyzun", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/darynalyzun", "resume": "https://drive.google.com/file/d/1GaPWuqk9I7l-3sEdqkrrPmC9_irUFopv/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Dmytro Klepatskyi", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/dmytro-klepatskyi-158132280/", "resume": "https://drive.google.com/file/d/1Bs3QhQYLLqJtFSdA4huDmsIiyzpql8oY/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Yana Sobol", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1b_xQLhhMv6FJIEtHN550cwxDnQ-7eg7Z/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}]}, "Ukrainian Catholic University": {"apps": 1, "interviewed": 0, "students": [{"name": "Davyd ILNYTSKYI", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/davyd-ilnytskyi/", "resume": "https://drive.google.com/file/d/1V_seUBFSKl1-nO9vgloSpKfFRjkajSE-/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "National forestry university of Ukraine - Automation computer integrated technol": {"apps": 1, "interviewed": 0, "students": [{"name": "Yevgen Romanov", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/y-oleksandrrovich/", "resume": "https://drive.google.com/file/d/1LSQgrunyambZHzCVfvcvtoQkj0-cxZOP/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "IT Step Academy; Python programming courses; 2021–2024": {"apps": 1, "interviewed": 0, "students": [{"name": "Dmytro Staroselskyi", "year": "Not specified", "year_cat": "unknown", "linkedin": null, "resume": "https://drive.google.com/file/d/1HCb4rRRBhEAuKNB8QXoMPItTQwd700M2/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Andrei Krupynskyi Lviv Medical Academy\nProfessional Junior Bachelor": {"apps": 1, "interviewed": 0, "students": [{"name": "Sofia Terentieva", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/terentievasofia", "resume": "https://drive.google.com/file/d/1QTL-YspZWfXKUSpAns7zSiiJEXw4Li4F/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Kharkiv Oblast": {"apps": 18, "interviewed": 1, "unis": {"Kharkiv National University of Radio Electronics": {"apps": 7, "interviewed": 1, "students": [{"name": "Illia Kharchenko", "year": "4th year", "year_cat": "4_year", "linkedin": "https://linkedin.com/in/ikharegzy", "resume": "https://drive.google.com/drive/folders/1grYdl8AYeX_-OKDp_FETclmrzlsRGNM6?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Mariia Zameta", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/mariia-zameta-b62230266/", "resume": "https://drive.google.com/file/d/1yp-1u-eLSuZ4b9OyfF7471q_-S2Ha0tx/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Damir Shemaiev", "year": "1st year", "year_cat": "1_year", "linkedin": "https://www.linkedin.com/in/damir-shemaiev-lahoda-784189388/", "resume": "https://drive.google.com/file/d/1Ra_ffQQwvbt0MZXBaZn0y2GWQ_xz1QPb/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "1st"}, {"name": "Markiian Babaiev", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/markiian-babaiev/", "resume": "https://drive.google.com/file/d/1bLZKsCRsoVDKyRYlzWBVDvw4LIXE_umP/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Andrii Kupriianov", "year": "2nd year", "year_cat": "2_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1YNtc5_cgPGAVCJKZuDG7TWwn7Q0Rdguu/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Oleksandra Kharina", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/oleksandra-kharina-3a5751210", "resume": "https://drive.google.com/file/d/1EEmYsA0z_z1cU2XmNx0VRn3Mh8-eVh98/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "unknown"}, {"name": "Nikita Zelenov", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/nikita-zelenov-573bb7261/", "resume": "https://drive.google.com/file/d/1Sm8iOPYSTUy2hS2Qw-sfjs-R09qezqes/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "Kharkiv Polytechnic Institute (NTU KhPI)": {"apps": 6, "interviewed": 0, "students": [{"name": "Stepa Netudyhatka", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://\"N/A\"", "resume": "https://docs.google.com/document/d/1m0WFEbCCU-PQF-qxnKi4rQ-wTkj07usp/edit?usp=drive_link&ouid=103038371222863989891&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Dmytro Oleksiienko", "year": "5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/dmytro-oleksiienko/", "resume": "https://drive.google.com/file/d/1XgNKLBXApLAYmIysRUH3bJh3lb1B8Wo5/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Kateryna Astafieva", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/kateryna-astafieva-818a332bb", "resume": "https://drive.google.com/file/d/1Cup3y5F5f7jF1SIJsraPhciiccD14itN/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Andrii Fortus", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/andrii-fortus/", "resume": "https://drive.google.com/file/d/1k0bGx3lbE4VVQTpz2LhLuXVxP0dOMmHo/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Vladyslav Kulikov", "year": "5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/vlad-kulikov-898113193/", "resume": "https://drive.google.com/file/d/13p2eDGwUepgyv5f75er3KFi8EdrdSL-m/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Serhii Bukhtiiarov", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1amHirn3AHVbSi40f6lzVz3E8TQ0nyIFj/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}, "KhNUE (Simon Kuznets Kharkiv National University of Economics)": {"apps": 1, "interviewed": 0, "students": [{"name": "Vadym Boiko", "year": "5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/boykov-m/", "resume": "https://drive.google.com/file/d/1_PRS1dzhQIENZasSChnyx0ECzU0W53Eo/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}]}, "Студент 3-й курс ХНАДУ (Механічний факультет)спец": {"apps": 1, "interviewed": 0, "students": [{"name": "Aleksandr Merkulov", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://docs.google.com/document/d/1y4VJZQk6rvtxIV9ggpBuM1MOtU7WbesCxppI-3SAFSE/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}, "National Aerospace University \"Kharkiv Aviation Institute\"": {"apps": 2, "interviewed": 0, "students": [{"name": "Denys Luhovtsov", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/denys-luhovtsov-a6b13b298/", "resume": "https://drive.google.com/file/d/15EMDDa9QszQ8PMVTeZyXdnXK5WB7SaIo/view", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Viktoriia Herus", "year": "Not specified", "year_cat": "unknown", "linkedin": null, "resume": "https://drive.google.com/file/d/1bXsIDAWwogm8JjKeHkfSaS8pSmdQZxhm/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "V. N. Karazin Kharkiv National University": {"apps": 1, "interviewed": 0, "students": [{"name": "Daria Kucher", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/daria-kucher-08a3b3405/", "resume": "https://drive.google.com/file/d/19f2umn89VbG0bxYq1qeu-rJ-VG1UeWfA/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Odesa Oblast": {"apps": 11, "interviewed": 0, "unis": {"Odesa Mechnikov National University": {"apps": 5, "interviewed": 0, "students": [{"name": "Eugene Sotchenko", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/eugene-sotchenko-2a2088281", "resume": "https://docs.google.com/document/d/1TknfZmfmabXy_MIGQbYULm7IqrGN341A/edit?usp=drive_link&ouid=117848224100955262898&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Amira Madani", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/amira-madani-03b135388/", "resume": "https://docs.google.com/document/d/1QfznrwQ9dN_wy0rDMM7xBbqeMHCpeLLg/edit?usp=sharing&ouid=106041288631044910243&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Vlad Slabidker", "year": "4th year", "year_cat": "4_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1gStzWF4qm8KoJt1okXEYm9tjfOO_RH2W/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Mykola Shubin", "year": "5th year", "year_cat": "5_year", "linkedin": null, "resume": "https://docs.google.com/document/d/1xaMKArbhEMPXn5ZM8d_4bLj24nMeuPd2dgUyeqr2Zis/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Artem Kushniruk", "year": "Not specified", "year_cat": "unknown", "linkedin": null, "resume": "https://drive.google.com/file/d/1qqLNcCsGyYc3UHP7M_29jXtot8ZkQDi2/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Odesa Polytechnic National University": {"apps": 4, "interviewed": 0, "students": [{"name": "Vlad Nakonechny", "year": "Not specified", "year_cat": "unknown", "linkedin": null, "resume": null, "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Viktor Ziuzin", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/viktor-ziuzin-040106215/", "resume": "https://drive.google.com/file/d/1FR6LA1OEjHraJmwgRUZLbZjRjNWQqukX/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Anastasiia Matychenko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/anastasiia-matychenko-b045461b3/", "resume": "https://drive.google.com/file/d/1HHF71JlQZOFl__MyRfBt5RCIvrf3BJnl/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Petr Yermak", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/petr-yermak-ml/", "resume": "https://docs.google.com/document/d/1caX1mavhN0RZ3lKp5z-kAIF4aRkvWYhX/edit?usp=sharing&ouid=100272541876155608209&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Odesa National Maritime University": {"apps": 1, "interviewed": 0, "students": [{"name": "Kira Stepanuk", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/kira-stepanuk-216b67412/", "resume": "https://drive.google.com/file/d/1b-1aYAAZ0fst-F3w73MhVO3R3dOB7IMf/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "Pylyp Orlyk International Classical University": {"apps": 1, "interviewed": 0, "students": [{"name": "Liudmyla Sevastianova", "year": "Not specified", "year_cat": "unknown", "linkedin": null, "resume": "https://drive.google.com/file/d/19GIZsAmUUc3I2mxVBPEGJ4TZXc8UuVkk/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Kyiv City": {"apps": 66, "interviewed": 9, "unis": {"State University of Information and Communication Technologies": {"apps": 2, "interviewed": 0, "students": [{"name": "Kristina Kozyr", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://\"N/A\"", "resume": "https://drive.google.com/file/d/1f_kc8yeHakBZPeFofTmEmetR5tUGQH3y/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Oleg Bondarenko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/oleh-bondarenko-5b59773ab/", "resume": "https://drive.google.com/file/d/118UDjw6dFs8UzN6h2MQOoRRhdJNkNrA2/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Taras Shevchenko National University of Kyiv": {"apps": 16, "interviewed": 2, "students": [{"name": "Anna Kharchenko", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/anna-kharchenko-knu-nure/", "resume": "https://drive.google.com/file/d/1zni8EX-r4mj9N7twWZrmp1YU6bHfK7HI/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Maksym Yatsenko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/maksym-yatsenko-ba9b62311/", "resume": "https://drive.google.com/drive/folders/1SxTnFjQR7pxWWJbHispO0f-QKsr7g_jU?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Нікіта Авдєєв", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/nikita-avdeev-8176b832a/", "resume": "https://docs.google.com/document/d/14KsPmOBbFvZnlEF-9yEfxUp21kz_YAHp/edit?usp=sharing&ouid=108407426515513032280&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Nikita Tkachuk", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/nikita-tkachuk-98bb94243", "resume": "https://drive.google.com/file/d/1oe-FuBcuMvzfbPfXO0_Mkv995CHjk_Gy/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Artem Zysko", "year": "5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/artem-zysko-360900217", "resume": "https://drive.google.com/file/d/1_pHyfcPdqz7ppKHC9WS9uLqU275oQDaR/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Vladyslav Haslo", "year": "1st year", "year_cat": "1_year", "linkedin": "https://www.linkedin.com/in/vladyslav-haslo", "resume": "https://drive.google.com/file/d/1JPM3rsvRikr02cFK82Au6vVE0UTJtVue/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "1st"}, {"name": "Anastasiia Matviiv", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/anastasiia-matviiv-a0672a283/?skipRedirect=true", "resume": "https://drive.google.com/file/d/1BsCwAMT_ytCosVVSvrlF-rFpAL1bYwP2/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Daniil Chernukha", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1xWbdcXDG4dFZyXLUMoRNH-BtGXYH2Bmi/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Dmytro Chuchman", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/dmytrochuchman/", "resume": null, "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Vitalii Myshov", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/vitalii-myshov-a2aab741a", "resume": "https://drive.google.com/file/d/1oBHs5O_ixhog328pFOW3R1MrnOHAnVw9/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Roman Kudermin", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/roman-kudermin-261192363/", "resume": "https://drive.google.com/drive/folders/1JXunyvUMAvKtenqESQEa9jRbLR4rmec8?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "3rd"}, {"name": "Artem Pikash", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/artem-pikash-024674339", "resume": "https://drive.google.com/file/d/1RB3bor-5aZaI_Q7DzTCaZ88-MbiZBn7C/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Oleksandra Lytvak", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://linkedin.com/in/oleksandra-lytvak", "resume": "https://drive.google.com/file/d/1X50hwP2kTgnfaUCvFoGRkshRwnJapjmL/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Artem Myroshnik", "year": "2nd year", "year_cat": "2_year", "linkedin": null, "resume": "https://docs.google.com/document/d/1sRONrtZOLm5EhXgZd0YoLhd-s7R93heaseqdBYs4fgE/edit?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Vadym Mynko", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/vadym-mynko-917130256", "resume": "https://drive.google.com/file/d/1cYUpKansc-rWV6IhbGRSYGgfen4x7Rds/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "4th"}, {"name": "Nazarii Okhrimchuk", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/nazarii-okhrimchuk-b689a2323/", "resume": "https://drive.google.com/file/d/1XGTtRrMvF4w6_tRdpVaxixNkwiOdTtfg/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "НПУ ім Драгоманова  математик магістр 2022": {"apps": 1, "interviewed": 0, "students": [{"name": "Тужик Вероніка", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/veronika-t-534249302", "resume": "https://drive.google.com/file/d/1CvTspYkjozfPN0Yx3eI7MNmt-1rx71Y2/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Igor Sikorsky Kyiv Polytechnic Institute": {"apps": 30, "interviewed": 5, "students": [{"name": "Bohdan Boklah", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/bohdan-boklah-742757370/", "resume": "https://drive.google.com/drive/folders/1Yz3WwXKmNSApQYnX6m_g0STG79gL90Pu?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "4th"}, {"name": "Dmytro Zakharchenko", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://github.com/Act42", "resume": "https://drive.google.com/file/d/1IUEdim04NjA1dzaypVZtq9dchVOTNgZz/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Dmytro Rozhyn", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/dmytro-rozhyn-72948441b/", "resume": "https://drive.google.com/file/d/1oE0bAkeCb3Ds6AQT6WAgmFd1kziIGBK3/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Viktoriia Lutchenko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://I have a LinkedIn profile, but I haven't filled it out - https://www.linkedin.com/in/viktoriia-lutchenko-1823a01b6/", "resume": "https://drive.google.com/file/d/1FW9FsrlpWJd-Ro-ny9vmL1WQNQOXM2CV/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "vadym tiron", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/vadym-tiron-b68871285/", "resume": "https://www.canva.com/design/DAGHRMvCbDQ/o6IyTRzNKe3d17i1SIZnEA/edit", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Artem Latko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/artem-latko-97414a31b/", "resume": "https://drive.google.com/file/d/1YmnPQGlII_443QazA1uIsctSblCRqjlK/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Dmytro Yedynach", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/dmytro-yedynach-350bbb302/", "resume": "https://drive.google.com/file/d/1oGXMM-9CN_3VzZf6qdywcQFZOnVqNqWa/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Andrii Bodnarchuk", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/andrii-bodnarchuk-3b4235313/", "resume": null, "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Danylo Havryliuk", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/danylo-havryliuk/", "resume": "https://drive.google.com/file/d/1Qw9_oiQzZfRIa_0lcnEzbQhlow2Z_hqJ/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Dmytro Kuzmenkov", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/kuzmenkoff/", "resume": "https://kuzmenkoff.github.io/cv/", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Daniil Bezsmertnyi", "year": "2nd year", "year_cat": "2_year", "linkedin": null, "resume": "https://docs.google.com/document/d/1FfNF0Sfx22dOpyjgjbshDA2Ptt640CmR/edit?usp=sharing&ouid=102817077399579199155&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Olena Serhiienko", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/olena-serhiienko/", "resume": "https://drive.google.com/file/d/1uc7FtZuCF8UM3Zb_ByEWe76UNK6s154S/view", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Antonina Davydenko", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/antonina-davydenko/", "resume": "https://drive.google.com/file/d/18R1G8_H5s5i3_dP4RXDl5g-JRAXHHyUJ/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Pavlo Khoroshun", "year": "4th year", "year_cat": "4_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1JJ2iLdG0dHKerbYn-YGlKcDM1cmce_GB/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Elina Sharabura", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/elina-sharabura/", "resume": "https://drive.google.com/file/d/1bJ-T2ia1nPYTBOu7zz5cnZjibpZOsAG9/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Oleksandr Zavadskyi", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/dedessoru", "resume": "https://drive.google.com/file/d/1eo26QrBOlh7jBO4nNXzsmEyGnIYr5KeH/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "3rd"}, {"name": "Kateryna Mekh", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/kateryna-m-9b8b05263?utm_source=share_via&utm_content=profile&utm_medium=member_ios", "resume": "https://docs.google.com/document/d/1WieJYPCmqB5T4NzKFHyCT4UdGz4EgIXLMD9wzcqmxLY/edit?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Dmytro Klymchuk", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/dmytro-klymchuk-971606238/", "resume": "https://drive.google.com/file/d/1cvgH3xdKd-GsWr_0zTiG78ud58KCxie7/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Nazar Solonenko", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1Uc-l7c2nCtay0TcXpTw37j8T2WvDOfeK/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Mykhailo Vasyliev", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/mykhailo-vasyliev-4586bb369/", "resume": "https://drive.google.com/file/d/12_-6S-Gk1mr9Emom1gaRLN0LIGeR5XOJ/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "3rd"}, {"name": "Kateryna Petrova", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1NbLZjaAzNiKFaw4RPzu03V34dtblxE_w/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Maryna Borovska", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/maryna-borovska-274a65352/", "resume": "https://drive.google.com/file/d/1gOgxzeBfx4EHLIV5ZcJ8SVp-jL48IbcE/view?usp=drivesdk", "interviewed": true, "interview_url": null, "bucket": "4th"}, {"name": "Polina Shuhaieva", "year": "2nd year", "year_cat": "2_year", "linkedin": null, "resume": "https://docs.google.com/document/d/1kN5lhbtP5oop7xc0z4tv05foHY_oORk-/edit?usp=drive_link&ouid=105016401635199137374&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Yuliia Romaniuk", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/yuliia-romaniuk-a78975322", "resume": "https://docs.google.com/document/d/1J5RjONGXxaHsRPmy2VX6HsJbI6CgBeHsOGsljQ-7mAY/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Petro Zinoviev", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/peter-zinoviev-b43716420/", "resume": "https://docs.google.com/document/d/1M1ag0fm3a17ON6r7tLci63jCnfOX5sZj/edit?usp=sharing&ouid=106878184105575434703&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Kyrylenko Oleksandr", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1H36ri6wz6UNBqV8bpRRBzVDwsozz6P0t/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Illia Havrylov", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/%D1%96%D0%BB%D0%BB%D1%8F-%D0%B3%D0%B0%D0%B2%D1%80%D0%B8%D0%BB%D0%BE%D0%B2-a9996a252/", "resume": "https://drive.google.com/drive/folders/17TjcS22mtGAX5SNUt8i3GhCRPeZmsybF?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Andrii Mavrin", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/andrii-mavrin-126a8b2b5/", "resume": "https://drive.google.com/file/d/14xkCZaQDQKuK44xxP92uzoM6nXGW8eEC/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Alisa Slipko", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/alisa-slipko-049498255", "resume": "https://drive.google.com/file/d/1PhkJLXDgT1HP6Y--gV13oTS0yILY35hu/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "4th"}, {"name": "Andrii Kovalenko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/andrii-kovalenko-57436a259/", "resume": "https://docs.google.com/document/d/12Pd2IQHiEXUwjJ5i10jWf8RH67adJ2rb", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "National university of Food Technology": {"apps": 1, "interviewed": 0, "students": [{"name": "Andrii Khvorostyna", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/andrii-khvorostyna-03725b147/", "resume": "https://drive.google.com/file/d/1qKYdVUG_BWoona--QlzAd5BMf_xvOh9d/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Kyiv School of Economics": {"apps": 2, "interviewed": 0, "students": [{"name": "Matvii Zarudnyi", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/matvii-zarudnyi", "resume": "https://canva.link/p47y3xbjgubr3zz", "interviewed": false, "interview_url": null, "bucket": "2nd"}, {"name": "Ivan Kondenko", "year": "Bachelor completed (4th year)", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/ivan-kondenko", "resume": "https://drive.google.com/file/d/1nm0XhRDlXbcAJ6u-nX25gwMvBMvKsntw/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "KNLU": {"apps": 1, "interviewed": 0, "students": [{"name": "Maksym Kliuchta", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/%D0%BC%D0%B0%D0%BA%D1%81%D0%B8%D0%BC-%D0%BA%D0%BB%D1%8E%D1%87%D1%82%D0%B0-348034259/", "resume": "https://drive.google.com/file/d/1X0JZvcu9cZ8H5S5o1_FVBZiO_CL7YV8C/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "KNUBA university bachelors degree": {"apps": 1, "interviewed": 0, "students": [{"name": "Serhii Pirkhal", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/serhii-pirkhal-24531835a/", "resume": "https://drive.google.com/file/d/1uljPh3K6TSgp-QBpcNzS3ViF4jrvdZHf/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "National University of Kyiv-Mohyla Academy": {"apps": 4, "interviewed": 1, "students": [{"name": "Ihor Hrabar", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/ihor-hrabar-b0a089151/", "resume": "https://drive.google.com/file/d/1MaeO9IL2pWtYaTmnLpiMb6LbKihSGZBY/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Viktoriia Dyrda", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/viktoriia-dyrda-31770734a/", "resume": "https://drive.google.com/file/d/1LjfIFgPuI0KO9QiICS00ewgz361AEIRM/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "4th"}, {"name": "Bohdan Prokhorov", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/bohdan-prokhorov-16a806262/", "resume": "https://drive.google.com/file/d/130_kkg76j1EUlqCTShu7RZb18q0K9T5U/", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Yehor Bilyi", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/yehor-bilyi-42b1b2281/", "resume": "https://drive.google.com/file/d/1TV-LQaNT4K13xzxhNx3eEKJAqtGYHXvy/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "National University \"Kyiv Aviation Institute": {"apps": 4, "interviewed": 0, "students": [{"name": "Mykhailo Halchenko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/mykhailo-halchenko-b2ab66318", "resume": "https://drive.google.com/file/d/1hZTfxhtimzB5jXA95IQX0hgqERbQp4vq/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Yaroslav Tkachuk", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/yaroslav-tkachuk", "resume": "https://drive.google.com/file/d/1qmMhfo2gcHWUk0A3TwSMg_1F2tYPwIEK/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Kostiantyn Shvets", "year": "4th year", "year_cat": "4_year", "linkedin": null, "resume": "https://docs.google.com/document/d/1pu9DwgHy3XteclCBnD_7HCURitMw_FldgzuB5Wwzjdk/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}, {"name": "Yaroslav Hura", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/yaroslav-hura-315257193", "resume": "https://docs.google.com/document/d/1NAsnyQFyWE08xj2xvrIh6V5OKtlwAkNHqatQY0Mcgd4/edit?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "State University of Information-Communication Technologies": {"apps": 1, "interviewed": 0, "students": [{"name": "German Bielow", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/%D0%B3%D0%B5%D1%80%D0%BC%D0%B0%D0%BD-%D0%B1%D1%94%D0%BB%D0%BE%D0%B2-90668a251/", "resume": "https://drive.google.com/file/d/1L8jqeAkNBhiJwMSIt4l3Do919eUmmQyx/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "КПЛТ": {"apps": 1, "interviewed": 0, "students": [{"name": "Nikita Sharapov", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/gamehappiness-undefined-80b2bb424/", "resume": null, "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "PhD": {"apps": 1, "interviewed": 0, "students": [{"name": "Andrii Bezkrovnyi", "year": "Not specified", "year_cat": "unknown", "linkedin": null, "resume": "https://drive.google.com/file/d/17xXHM8pr6wXUCESl8bciR1ehQmwPwqtq/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "I hold a Bachelor's degree with honors in Computer Science from Igor Sikorsky Ky": {"apps": 1, "interviewed": 1, "students": [{"name": "Oleksii Verbytskyi", "year": "5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/oleksii-verbytskyi-aa3768295", "resume": "https://drive.google.com/file/d/1C7iiycLcOTplAj9hYB73gYJgu5-tOBEu/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "5th"}]}}}, "Dnipropetrovsk Oblast": {"apps": 6, "interviewed": 1, "unis": {"Донбаська національна академія будівництва і архітектури": {"apps": 1, "interviewed": 0, "students": [{"name": "Sergii Radion", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/%D1%81%D0%B5%D1%80%D0%B3%D0%B5%D0%B9-%D1%80%D0%B0%D0%B4%D0%B8%D0%BE%D0%BD-a0bb76330/?skipRedirect=true", "resume": "https://docs.google.com/document/d/1vYVdl59aJ_CvurWTk7GSErln4-512j3B/edit", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "KRYVYI RIH NATIONAL UNIVERSITY\nMS in Software Engineering 2020– 2022 | Kryvyi Ri": {"apps": 1, "interviewed": 0, "students": [{"name": "Mykhailo Bohun", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/mykhailo-bohun-a3b0151a5/", "resume": "https://drive.google.com/file/d/1V_FfjCXWRROglw3fEtcsy4ArncGWyOVz/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Alfred Nobel University": {"apps": 1, "interviewed": 0, "students": [{"name": "Анна Мирошниченко", "year": "4th year", "year_cat": "4_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1ibqhrKzftHzSMI4Kkt-Fpzrg3BcITKeF/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "Dnipro University of Technolodgy()": {"apps": 1, "interviewed": 0, "students": [{"name": "Mykyta Husiev", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/nikita-gusev-b51637281", "resume": "https://drive.google.com/file/d/1bcOvl0ylgk3i3xzvWQSw0I_dkvYoli5I/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "University of Customs and Finance": {"apps": 1, "interviewed": 0, "students": [{"name": "Alina Voievodina", "year": "Not specified", "year_cat": "unknown", "linkedin": null, "resume": "https://drive.google.com/file/d/1n-f_rwVlbMN-_oNyJ-sAGqSl7EGw4K0H/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "Oles Honchar Dnipro National University": {"apps": 1, "interviewed": 1, "students": [{"name": "Dmytro Cheshenko", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://www.linkedin.com/in/dmytro-cheshenko/", "resume": "https://drive.google.com/file/d/1ALqpvzphliK3lhceL4sl9-ZH55Nm4_D5/view?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "5th"}]}}}, "Chernihiv Oblast": {"apps": 2, "interviewed": 0, "unis": {"Chernihiv Polytechnic National University": {"apps": 2, "interviewed": 0, "students": [{"name": "Vladyslav Yevtushenko", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": null, "resume": "https://drive.google.com/drive/folders/1nMCu9kKOSlqF8xuM7qZxzLFH_jZapO5d?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "5th"}, {"name": "Yulia Lysenko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/yulialysenko3011", "resume": "https://drive.google.com/file/d/15iG3KGfb3DIwt0SI9c9ZI6QHDxBrOo1-/view?usp=drivesdk", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Kirovohrad Oblast": {"apps": 1, "interviewed": 0, "unis": {"Central Ukrainian National Technical University  | Accounting and Audit | Bachel": {"apps": 1, "interviewed": 0, "students": [{"name": "Iryna Kosenko", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/iryna-kosenko/", "resume": "https://drive.google.com/file/d/1HbL_MfIlzpDlxWkMwsCHMelydqo0ZbLh/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Chernivtsi Oblast": {"apps": 2, "interviewed": 1, "unis": {"Yuriy Fedkovych Chernivtsi National University": {"apps": 2, "interviewed": 1, "students": [{"name": "Oleh Dmytruk", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/oleh-dmytruk-015622405/", "resume": "https://drive.google.com/file/d/1ro_huo-FmV0kh7ilRp-Uh6AuY-te9MFr/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}, {"name": "Bohdan Lukhanin", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/lukhaninua/", "resume": "https://docs.google.com/document/d/1WXOBIWUgo8455_nViOh1dzvSe_-CoEoEe0uo7ZEwS3o/edit?usp=sharing", "interviewed": true, "interview_url": null, "bucket": "3rd"}]}}}, "Khmelnytskyi Oblast": {"apps": 3, "interviewed": 0, "unis": {"Technological University": {"apps": 1, "interviewed": 0, "students": [{"name": "Serhii Monastyrskyi", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/serhii-monastyrskyi-41b739130/?locale=ru", "resume": "https://drive.google.com/file/d/132Jm_O0pCppaIu5PcTQpPqe1aakNZBuf/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}, "khmelnytskyi national university": {"apps": 1, "interviewed": 0, "students": [{"name": "Максим Марценюк", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/maksym-martseniuk/", "resume": "https://drive.google.com/file/d/1vNwsTBX9wRYpV0CwAxDcSxxpWXRzJiVS/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "2nd"}]}, "Khmlenytskyi National University": {"apps": 1, "interviewed": 0, "students": [{"name": "Denys Stadnik", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/denys-stadnik-020b0118a?utm_source=share_via&utm_content=profile&utm_medium=member_android", "resume": null, "interviewed": false, "interview_url": null, "bucket": "3rd"}]}}}, "Ternopil Oblast": {"apps": 3, "interviewed": 0, "unis": {"Ternopil Ivan Pului National Technical University": {"apps": 2, "interviewed": 0, "students": [{"name": "Denis Ivanyuta", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/denis-ivanyuta-2bbaab2bb?utm_source=share_via&utm_content=profile&utm_medium=member_android", "resume": "https://www.linkedin.com/in/denis-ivanyuta-2bbaab2bb?utm_source=share_via&utm_content=profile&utm_medium=member_android", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Volodymyr Danyliuk", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1GmpxakXUQS6Jq_mcvCqb-43acPZYVkjy/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}, "West ukrainian national university": {"apps": 1, "interviewed": 0, "students": [{"name": "Artem Tsvetkov", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/artem-tsvietkov-712537334/", "resume": "https://drive.google.com/file/d/1iE1sOXNqMRMbhh3NKOED_b1_4Uw7hDRP/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}}}, "Vinnytsia Oblast": {"apps": 2, "interviewed": 0, "unis": {"VNTU": {"apps": 1, "interviewed": 0, "students": [{"name": "Denys Petlinskyi", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/денис-петлінський-225a8a352", "resume": "https://drive.google.com/file/d/1wc9MbVA8UnYN1n3aMZ7cqxSax9UmU8ci/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "Vinnytsia National Technical University": {"apps": 1, "interviewed": 0, "students": [{"name": "Dmytro Skaliush", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/dasaskaton/", "resume": "https://drive.google.com/file/d/11lm3Bpr0sG_wBFEnVyh4_CAcXScZxcTw/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Foreign: Austria": {"apps": 1, "interviewed": 0, "unis": {"CUSU": {"apps": 1, "interviewed": 0, "students": [{"name": "Ivan Kononenko", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/ivan-k0nonenko-at/", "resume": "https://docs.google.com/document/d/1xvjYMbKihhhYLt2E1RIBS4qRVxd5B0no07idE81feJg/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "2nd"}]}}}, "Foreign: Taiwan": {"apps": 1, "interviewed": 0, "unis": {"NYCU (National Yang Ming Chiao Tung University)": {"apps": 1, "interviewed": 0, "students": [{"name": "Anna Kompan", "year": "Master's / 5th year", "year_cat": "5_year", "linkedin": "https://linkedin.com/in/anna-kompan", "resume": "https://docs.google.com/document/d/1q9Az4k4sYdj5ULnj94EthcyVL9ZUGklCg-IlB3I1yYg/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "5th"}]}}}, "Zhytomyr Oblast": {"apps": 3, "interviewed": 0, "unis": {"1": {"apps": 1, "interviewed": 0, "students": [{"name": "Viktoriia Turchynova", "year": "4th year", "year_cat": "4_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1fRn7fkiHbPIzAjw4nvQs2TpHZEgYbVaG/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}, "Zhytomyr Polytechnic State University": {"apps": 2, "interviewed": 0, "students": [{"name": "Maksym Horai", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/%D0%BC%D0%B0%D0%BA%D1%81%D0%B8%D0%BC-%D0%B3%D0%BE%D1%80%D0%B0%D0%B9-456b62343/?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3Bpk9UD2O7RgKGOmlI1A4AaQ%3D%3D", "resume": "https://drive.google.com/file/d/1bbhNdcF5EgapNykBCJ0b-UcmVFwxkp4G/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}, {"name": "Maksym Marynyuk", "year": "2nd year", "year_cat": "2_year", "linkedin": "https://www.linkedin.com/in/maksym-marynyuk", "resume": "https://drive.google.com/drive/folders/18Wsrmh15mDLi5YFkjNLyjQxeuGd0s78U?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "2nd"}]}}}, "Foreign: Poland": {"apps": 1, "interviewed": 0, "unis": {"Lublin University of Technology": {"apps": 1, "interviewed": 0, "students": [{"name": "Mykhailo Zemliakov", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/mykhailo-zemliakov", "resume": "https://drive.google.com/file/d/1i2XI1O9XeumF9RfBejryKMBxE37MQqM8/view?usp=drive_link", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}}}, "Foreign: Pakistan": {"apps": 1, "interviewed": 0, "unis": {"Quaid-I-Azam University": {"apps": 1, "interviewed": 0, "students": [{"name": "Muhammad Shahid", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/muhammad-shahid-0998991b0", "resume": "https://drive.google.com/file/d/1GWwtmYQsh6cxIBbqV9MUJMisjkzOadN7/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Not specified": {"apps": 1, "interviewed": 0, "unis": {"PhD in Electrical Engineering and Electrical Technologies": {"apps": 1, "interviewed": 0, "students": [{"name": "Oleksandr Palaniuk", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/oleksandr-palaniuk-6095341a0", "resume": "https://docs.google.com/document/d/13roih_dlk7ZKaW_YiPR2PeLXoOTZWGgp/edit?usp=sharing&ouid=117073362056761502332&rtpof=true&sd=true", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Ivano-Frankivsk Oblast": {"apps": 2, "interviewed": 0, "unis": {"Vasyl Stefanyk Carpathian National University": {"apps": 1, "interviewed": 0, "students": [{"name": "Andrii Yatsyshyn", "year": "3rd year", "year_cat": "3_year", "linkedin": "https://www.linkedin.com/in/andriiyatsyshyn/", "resume": "https://drive.google.com/file/d/1TTacZ3bu_f0HwUikpA4zRNHhvpFYBods/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}, "Vasyl Stefanyk National Carpathian University": {"apps": 1, "interviewed": 0, "students": [{"name": "Volodymyr Zubiak", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/volodymyr-zubiak-b26165398/", "resume": "https://drive.google.com/file/d/1LZGFz2qLT1DQsYDASkK5dfrlmLKOFRlx/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}}}, "Kherson Oblast": {"apps": 1, "interviewed": 0, "unis": {"NKPT (новокаховський технікум)": {"apps": 1, "interviewed": 0, "students": [{"name": "Олександр Козубський", "year": "Not specified", "year_cat": "unknown", "linkedin": "https://www.linkedin.com/in/alexander-kozubsky/", "resume": "https://drive.google.com/file/d/1DptHLOncAMiQXywH37yBlztJ7-5g3JLg/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Volyn Oblast": {"apps": 1, "interviewed": 0, "unis": {"Горохівський ліцей №2 імені В": {"apps": 1, "interviewed": 0, "students": [{"name": "Ivan Tymoshuk", "year": "School pupil", "year_cat": "unknown", "linkedin": null, "resume": null, "interviewed": false, "interview_url": null, "bucket": "unknown"}]}}}, "Cherkasy Oblast": {"apps": 1, "interviewed": 0, "unis": {"Cherkasy State Technological University": {"apps": 1, "interviewed": 0, "students": [{"name": "Iryna Hrytsenko", "year": "4th year", "year_cat": "4_year", "linkedin": "https://www.linkedin.com/in/iryna-hrytsenko-valeriivna", "resume": "https://docs.google.com/document/d/1yo96jRV51ysRtCYi5fBXKErdjZI4YWonhWA0yMSVc-M/edit?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "4th"}]}}}, "Zaporizhzhia Oblast": {"apps": 1, "interviewed": 0, "unis": {"3rd-year student of Zaporizhzhia Electrotechnical College": {"apps": 1, "interviewed": 0, "students": [{"name": "Dmytro Pytak", "year": "3rd year", "year_cat": "3_year", "linkedin": null, "resume": "https://drive.google.com/file/d/1yoZG4rY6SaqMtj5u2KF0uKCkHuE7kUA5/view?usp=sharing", "interviewed": false, "interview_url": null, "bucket": "3rd"}]}}}};
+let activeLab = 'edge';
+let DATA = JSON.parse(JSON.stringify(RAW_DATA_EDGE));
+let DATA_EDGE = JSON.parse(JSON.stringify(RAW_DATA_EDGE));
+let activeRegion = null;
+let activeTab = 'region';
+let geojsonFeatures = []; // populated on load
+
+// ============ HELPERS ============
+function appsClass(n) {
+  if (n === 0) return 'var(--apps-0)';
+  if (n <= 1) return 'var(--apps-1)';
+  if (n <= 3) return 'var(--apps-2)';
+  if (n <= 9) return 'var(--apps-3)';
+  if (n <= 19) return 'var(--apps-4)';
+  if (n <= 29) return 'var(--apps-5)';
+  return 'var(--apps-6)';
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Recompute totals
+function recomputeRegionTotals(regionName) {
+  const r = DATA[regionName];
+  if (!r) return;
+  let apps = 0, intv = 0;
+  for (const u of Object.values(r.unis)) {
+    apps += Number(u.apps) || 0;
+    intv += Number(u.interviewed) || 0;
+  }
+  r.apps = apps; r.interviewed = intv;
+}
+function recomputeAllTotals() {
+  let totalApps = 0, totalInt = 0, regionsWithApps = 0, totalUnis = 0;
+  for (const [name, r] of Object.entries(DATA)) {
+    recomputeRegionTotals(name);
+    totalApps += r.apps; totalInt += r.interviewed;
+    if (r.apps > 0) regionsWithApps += 1;
+    totalUnis += Object.keys(r.unis).length;
+  }
+  document.getElementById('totalApps').textContent = totalApps;
+  document.getElementById('totalInt').textContent = totalInt;
+  document.getElementById('totalRegions').textContent = regionsWithApps;
+  document.getElementById('totalUnis').textContent = totalUnis;
+}
+
+// ============ MAP RENDERING ============
+
+// Apply Firebase/local edits overlay onto current DATA (and recompute interviewed counts)
+function applyEdits() {
+  if (!window.FB) return;
+  for (const r of Object.values(DATA)) {
+    for (const u of Object.values(r.unis)) {
+      for (const st of u.students) {
+        const e = window.FB.getEdit(activeLab, st.name);
+        if (e) {
+          if ('company' in e)      st.company      = e.company;
+          if ('company_url' in e)  st.company_url  = e.company_url;
+          if ('interview_url' in e) st.interview_url = e.interview_url;
+          if ('bucket' in e)       st.bucket        = e.bucket;
+          if ('year' in e)         st.year          = e.year;
+          if ('year_cat' in e)     st.year_cat      = e.year_cat;
+        }
+      }
+    }
+  }
+}
+
+// Equirectangular projection: lon/lat -> x/y
+function project(lon, lat, bbox, width, height, padding) {
+  const [minLon, minLat, maxLon, maxLat] = bbox;
+  const lonRange = maxLon - minLon;
+  const latRange = maxLat - minLat;
+  // Aspect-correct scaling
+  const meanLat = (minLat + maxLat) / 2;
+  const lonScale = Math.cos(meanLat * Math.PI / 180);
+  const innerW = width - 2 * padding;
+  const innerH = height - 2 * padding;
+  const sx = innerW / (lonRange * lonScale);
+  const sy = innerH / latRange;
+  const s = Math.min(sx, sy);
+  const offsetX = padding + (innerW - lonRange * lonScale * s) / 2;
+  const offsetY = padding + (innerH - latRange * s) / 2;
+  return [
+    offsetX + (lon - minLon) * lonScale * s,
+    offsetY + (maxLat - lat) * s
+  ];
+}
+
+function ringToPath(ring, bbox, w, h, pad) {
+  let d = '';
+  for (let i = 0; i < ring.length; i++) {
+    const [lon, lat] = ring[i];
+    const [x, y] = project(lon, lat, bbox, w, h, pad);
+    d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+  }
+  return d + 'Z';
+}
+
+function geometryToPath(geom, bbox, w, h, pad) {
+  let d = '';
+  if (geom.type === 'Polygon') {
+    geom.coordinates.forEach(ring => { d += ringToPath(ring, bbox, w, h, pad); });
+  } else if (geom.type === 'MultiPolygon') {
+    geom.coordinates.forEach(poly => {
+      poly.forEach(ring => { d += ringToPath(ring, bbox, w, h, pad); });
+    });
+  }
+  return d;
+}
+
+function geometryCentroid(geom) {
+  let sx = 0, sy = 0, n = 0;
+  const visit = (ring) => { ring.forEach(([lon, lat]) => { sx += lon; sy += lat; n++; }); };
+  if (geom.type === 'Polygon') geom.coordinates.forEach(visit);
+  else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(p => p.forEach(visit));
+  return n ? [sx / n, sy / n] : [0, 0];
+}
+
+function calcBbox(features) {
+  let minLon = 999, minLat = 999, maxLon = -999, maxLat = -999;
+  const visit = (ring) => ring.forEach(([lon, lat]) => {
+    if (lon < minLon) minLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lon > maxLon) maxLon = lon;
+    if (lat > maxLat) maxLat = lat;
+  });
+  features.forEach(f => {
+    const g = f.geometry;
+    if (g.type === 'Polygon') g.coordinates.forEach(visit);
+    else if (g.type === 'MultiPolygon') g.coordinates.forEach(p => p.forEach(visit));
+  });
+  return [minLon, minLat, maxLon, maxLat];
+}
+
+function resolveRegionName(props) {
+  // Try common property keys
+  const candidates = [
+    props.name, props.NAME, props.name_en, props.NAME_1, props.NAME_EN,
+    props.shapeName, props.shapename, props['name:en'], props['name:uk'],
+    props.SHAPENAME,
+  ].filter(Boolean);
+  for (const c of candidates) {
+    const k = c.toLowerCase().trim();
+    if (NAME_LOOKUP[k]) return NAME_LOOKUP[k];
+    // partial match
+    for (const [variantLow, canon] of Object.entries(NAME_LOOKUP)) {
+      if (k.includes(variantLow) || variantLow.includes(k)) return canon;
+    }
+  }
+  // Fallback - use first available name
+  return candidates[0] || 'Unknown region';
+}
+
+function renderMap() {
+  if (!geojsonFeatures.length) return;
+  const wrap = document.getElementById('mapWrap');
+  const W = 1000, H = 640, PAD = 16;
+  const bbox = calcBbox(geojsonFeatures);
+
+  let svg = `<svg class="ukraine" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <g id="oblasts">`;
+
+  const labels = [];
+  for (const feature of geojsonFeatures) {
+    const regionName = resolveRegionName(feature.properties || {});
+    const region = DATA[regionName];
+    const apps = region ? region.apps : 0;
+    const interviewed = region ? region.interviewed : 0;
+    const fill = appsClass(apps);
+    const interviewedClass = interviewed > 0 ? ' interviewed-region' : '';
+    const activeClass = activeRegion === regionName ? ' active' : '';
+    const path = geometryToPath(feature.geometry, bbox, W, H, PAD);
+    svg += `<path class="region${interviewedClass}${activeClass}" data-region="${escapeHtml(regionName)}"
+            d="${path}" style="fill:${fill}"/>`;
+
+    if (apps > 0) {
+      const [clon, clat] = geometryCentroid(feature.geometry);
+      const [cx, cy] = project(clon, clat, bbox, W, H, PAD);
+      labels.push({ x: cx, y: cy, count: apps, interviewed });
+    }
+  }
+  svg += `</g><g id="badges">`;
+  labels.forEach(l => {
+    svg += `<text class="region-count" x="${l.x.toFixed(0)}" y="${(l.y + 4).toFixed(0)}">${l.count}</text>`;
+    if (l.interviewed > 0) {
+      svg += `<text class="interview-badge" x="${l.x.toFixed(0)}" y="${(l.y + 19).toFixed(0)}">✓ ${l.interviewed}</text>`;
+    }
+  });
+  svg += `</g></svg>`;
+  wrap.innerHTML = svg;
+
+  // Attach click handlers
+  document.querySelectorAll('.region').forEach(el => {
+    el.addEventListener('click', () => {
+      const name = el.getAttribute('data-region');
+      if (DATA[name]) selectRegion(name);
+    });
+  });
+}
+
+// ============ RIGHT PANEL ============
+
+const COURSE_BUCKETS = [
+  { key: '1st',       label: '1st year' },
+  { key: '2nd',       label: '2nd year' },
+  { key: '3rd',       label: '3rd year' },
+  { key: '4th',       label: '4th year' },
+  { key: '5th',       label: '5th year' },
+  { key: 'graduates', label: 'Graduates' },
+  { key: 'unknown',   label: 'Unknown'   },
+];
+
+// Sort order: interviewed first, then by course bucket (1st → graduates → unknown)
+const BUCKET_SORT_ORDER = { '1st': 0, '2nd': 1, '3rd': 2, '4th': 3, '5th': 4, 'graduates': 5, 'unknown': 6 };
+function sortStudents(students) {
+  return students.slice().sort((a, b) => {
+    if (a.interviewed !== b.interviewed) return a.interviewed ? -1 : 1;
+    const ao = BUCKET_SORT_ORDER[a.bucket] ?? 99;
+    const bo = BUCKET_SORT_ORDER[b.bucket] ?? 99;
+    if (ao !== bo) return ao - bo;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+}
+
+function renderCourseChart(students) {
+  // Aggregate by bucket
+  const totals = {}, interviewed = {};
+  for (const b of COURSE_BUCKETS) { totals[b.key] = 0; interviewed[b.key] = 0; }
+  let hasUnknown = false;
+  for (const s of students) {
+    const b = s.bucket || 'unknown';
+    totals[b] = (totals[b] || 0) + 1;
+    if (s.interviewed) interviewed[b] = (interviewed[b] || 0) + 1;
+    if (b === 'unknown') hasUnknown = true;
+  }
+  // Find max for scaling
+  const maxVal = Math.max(1, ...Object.values(totals));
+
+  // Build rows
+  const buckets = COURSE_BUCKETS.filter(b => b.key !== 'unknown' || hasUnknown);
+  const rows = buckets.map(b => {
+    const total = totals[b.key];
+    const intv = interviewed[b.key];
+    const apps = total - intv;
+    if (total === 0) {
+      return `
+        <div class="row empty">
+          <span class="row-label">${b.label}</span>
+          <div class="row-bar"></div>
+          <span class="row-total">0</span>
+        </div>`;
+    }
+    const totalPct = (total / maxVal) * 100;
+    // Inside the row-bar (which itself is totalPct % wide), apps and intv split it
+    const intvPct = total > 0 ? (intv / total) * 100 : 0;
+    const appsPct = 100 - intvPct;
+    return `
+      <div class="row">
+        <span class="row-label">${b.label}</span>
+        <div class="row-bar" style="width: ${totalPct.toFixed(1)}%; min-width: ${total > 0 ? '14px' : '0'};">
+          ${apps > 0 ? `<div class="seg applications" style="width: ${appsPct.toFixed(1)}%;" title="${apps} applications">${apps}</div>` : ''}
+          ${intv > 0 ? `<div class="seg interviewed" style="width: ${intvPct.toFixed(1)}%;" title="${intv} interviewed">${intv}</div>` : ''}
+        </div>
+        <span class="row-total">${total}</span>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="course-chart">
+      <h5>Distribution by course</h5>
+      ${rows}
+      <div class="legend">
+        <div class="key"><span class="swatch applications"></span>Applications</div>
+        <div class="key"><span class="swatch interviewed"></span>Interviewed</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderStudent(s) {
+  const sid = 'st_' + s.name.replace(/[^a-zA-Z0-9]/g, '_');
+  const linksHtml = `
+    <div class="student-links">
+      ${s.linkedin
+        ? `<a class="student-link linkedin" href="${escapeHtml(s.linkedin)}" target="_blank" rel="noopener">LinkedIn ↗</a>`
+        : `<span class="student-link missing">LinkedIn — not provided</span>`}
+      ${s.resume
+        ? `<a class="student-link cv" href="${escapeHtml(s.resume)}" target="_blank" rel="noopener">CV ↗</a>`
+        : `<span class="student-link missing">CV — not provided</span>`}
+      ${s.interviewed ? (() => {
+        const rid = 'rec_' + s.name.replace(/[^a-zA-Z0-9]/g, '_');
+        const hasRec = s.interview_url && s.interview_url.trim();
+        return `<span class="recording-row">
+          ${hasRec
+            ? `<a class="student-link recording" href="${escapeHtml(s.interview_url)}" target="_blank" rel="noopener">▶ Recording ↗</a>
+               <button class="company-edit-btn" onclick="showRecordingEditor('${escapeHtml(s.name)}')">✎ Edit</button>`
+            : `<button class="company-edit-btn" onclick="showRecordingEditor('${escapeHtml(s.name)}')">+ Add recording</button>`}
+          <span id="${rid}_editor" style="display:none;">
+            <input class="company-input url-input" id="${rid}_url" type="url"
+                   placeholder="https://drive.google.com/…" value="${escapeHtml(s.interview_url || '')}"
+                   style="width:230px;"
+                   onblur="saveRecording('${escapeHtml(s.name)}')"/>
+          </span>
+        </span>`;
+      })() : ''}
+    </div>`;
+
+  const companyHtml = (() => {
+    const hasCompany = s.company && s.company.trim();
+    const hasUrl = s.company_url && s.company_url.trim();
+    return `
+    <div class="company-row" id="${sid}_row">
+      <span class="company-lbl">💼 Company:</span>
+      ${hasCompany
+        ? `<a class="company-link" href="${escapeHtml(hasUrl ? s.company_url : '#')}" ${hasUrl ? 'target="_blank" rel="noopener"' : ''}>
+             ${escapeHtml(s.company)}${hasUrl ? ' ↗' : ''}
+           </a>
+           <button class="company-edit-btn" onclick="showCompanyEditor('${escapeHtml(s.name)}')">✎ Edit</button>`
+        : `<button class="company-edit-btn" onclick="showCompanyEditor('${escapeHtml(s.name)}')">+ Add company</button>`}
+      <span id="${sid}_editor" style="display:none;">
+        <span class="company-editor-form">
+          <input class="company-input name-input" id="${sid}_name" type="text"
+                 placeholder="Company name" value="${escapeHtml(s.company || '')}"
+                 onblur="saveCompany('${escapeHtml(s.name)}')"/>
+          <input class="company-input url-input" id="${sid}_url" type="url"
+                 placeholder="https://linkedin.com/company/…" value="${escapeHtml(s.company_url || '')}"
+                 onblur="saveCompany('${escapeHtml(s.name)}')"/>
+        </span>
+      </span>
+    </div>`;
+  })();
+
+  return `
+    <div class="student ${s.interviewed ? 'interviewed' : ''}">
+      <div class="student-info">
+        <div class="student-name">
+          ${s.interviewed ? '<span class="check">✓</span>' : ''}
+          ${escapeHtml(s.name)}
+        </div>
+        <div class="student-year" id="${sid}_yearrow">
+          <span class="year-text">${escapeHtml(s.year || '—')}</span>
+          <button class="company-edit-btn year-edit-btn" onclick="showYearEditor('${escapeHtml(s.name)}')">✎</button>
+          <select id="${sid}_yearsel" class="year-select" style="display:none;" onchange="saveYear('${escapeHtml(s.name)}')" onblur="hideYearEditor('${escapeHtml(s.name)}')">
+            <option value="1st"${s.bucket === '1st' ? ' selected' : ''}>1st year</option>
+            <option value="2nd"${s.bucket === '2nd' ? ' selected' : ''}>2nd year</option>
+            <option value="3rd"${s.bucket === '3rd' ? ' selected' : ''}>3rd year</option>
+            <option value="4th"${s.bucket === '4th' ? ' selected' : ''}>4th year</option>
+            <option value="5th"${s.bucket === '5th' ? ' selected' : ''}>5th year / Master's</option>
+            <option value="graduates"${s.bucket === 'graduates' ? ' selected' : ''}>Graduate</option>
+            <option value="unknown"${s.bucket === 'unknown' ? ' selected' : ''}>Unknown</option>
+          </select>
+        </div>
+        ${linksHtml}
+        ${companyHtml}
+      </div>
+    </div>
+  `;
+}
+
+function showCompanyEditor(name) {
+  const sid = 'st_' + name.replace(/[^a-zA-Z0-9]/g, '_');
+  const editor = document.getElementById(sid + '_editor');
+  if (editor) {
+    editor.style.display = editor.style.display === 'none' ? 'inline-flex' : 'none';
+    if (editor.style.display !== 'none') {
+      const inp = document.getElementById(sid + '_name');
+      if (inp) inp.focus();
+    }
+  }
+}
+
+function saveCompany(name) {
+  const sid = 'st_' + name.replace(/[^a-zA-Z0-9]/g, '_');
+  const nameEl = document.getElementById(sid + '_name');
+  const urlEl  = document.getElementById(sid + '_url');
+  if (!nameEl || !urlEl) return;
+
+  // small delay so both onblur events fire before re-render
+  setTimeout(() => {
+    const companyName = nameEl.value.trim();
+    const companyUrl  = urlEl.value.trim();
+
+    for (const r of Object.values(DATA)) {
+      for (const u of Object.values(r.unis)) {
+        const st = u.students.find(s => s.name === name);
+        if (st) {
+          st.company     = companyName || null;
+          st.company_url = companyUrl  || null;
+          if (window.FB) window.FB.saveEdit(activeLab, name, { company: st.company, company_url: st.company_url });
+          renderPanel();
+          return;
+        }
+      }
+    }
+  }, 150);
+}
+
+function showRecordingEditor(name) {
+  const rid = 'rec_' + name.replace(/[^a-zA-Z0-9]/g, '_');
+  const editor = document.getElementById(rid + '_editor');
+  if (editor) {
+    editor.style.display = editor.style.display === 'none' ? 'inline-flex' : 'none';
+    if (editor.style.display !== 'none') {
+      const inp = document.getElementById(rid + '_url');
+      if (inp) inp.focus();
+    }
+  }
+}
+
+function saveRecording(name) {
+  const rid = 'rec_' + name.replace(/[^a-zA-Z0-9]/g, '_');
+  const urlEl = document.getElementById(rid + '_url');
+  if (!urlEl) return;
+  setTimeout(() => {
+    const recUrl = urlEl.value.trim();
+    for (const r of Object.values(DATA)) {
+      for (const u of Object.values(r.unis)) {
+        const st = u.students.find(s => s.name === name);
+        if (st) {
+          st.interview_url = recUrl || null;
+          if (window.FB) window.FB.saveEdit(activeLab, name, { interview_url: st.interview_url });
+          renderPanel();
+          return;
+        }
+      }
+    }
+  }, 150);
+}
+
+const YEAR_LABELS = {
+  '1st': '1st year', '2nd': '2nd year', '3rd': '3rd year', '4th': '4th year',
+  '5th': "5th year / Master's", 'graduates': 'Graduate', 'unknown': 'Unknown',
+};
+
+function showYearEditor(name) {
+  const sid = 'st_' + name.replace(/[^a-zA-Z0-9]/g, '_');
+  const sel = document.getElementById(sid + '_yearsel');
+  const txt = document.querySelector('#' + sid + '_yearrow .year-text');
+  const btn = document.querySelector('#' + sid + '_yearrow .year-edit-btn');
+  if (sel) {
+    sel.style.display = 'inline-block';
+    if (txt) txt.style.display = 'none';
+    if (btn) btn.style.display = 'none';
+    sel.focus();
+  }
+}
+
+function hideYearEditor(name) {
+  // small delay so onchange fires first
+  setTimeout(() => {
+    const sid = 'st_' + name.replace(/[^a-zA-Z0-9]/g, '_');
+    const sel = document.getElementById(sid + '_yearsel');
+    const txt = document.querySelector('#' + sid + '_yearrow .year-text');
+    const btn = document.querySelector('#' + sid + '_yearrow .year-edit-btn');
+    if (sel) sel.style.display = 'none';
+    if (txt) txt.style.display = '';
+    if (btn) btn.style.display = '';
+  }, 200);
+}
+
+function saveYear(name) {
+  const sid = 'st_' + name.replace(/[^a-zA-Z0-9]/g, '_');
+  const sel = document.getElementById(sid + '_yearsel');
+  if (!sel) return;
+  const newBucket = sel.value;
+  for (const r of Object.values(DATA)) {
+    for (const u of Object.values(r.unis)) {
+      const st = u.students.find(s => s.name === name);
+      if (st) {
+        st.bucket = newBucket;
+        st.year = YEAR_LABELS[newBucket] || newBucket;
+        st.year_cat = newBucket;
+        if (window.FB) window.FB.saveEdit(activeLab, name, { bucket: st.bucket, year: st.year, year_cat: st.year_cat });
+        renderPanel();
+        return;
+      }
+    }
+  }
+}
+
+function renderUniCard(uni, regionName, uniKey) {
+  const sortedStudents = sortStudents(uni.students);
+  const chartHtml = uni.students.length ? renderCourseChart(uni.students) : '';
+  const studentsHtml = sortedStudents.length
+    ? sortedStudents.map(renderStudent).join('')
+    : '<div style="color:var(--text-muted); font-size:12px; padding:6px 0;">No students</div>';
+
+  return `
+    <div class="uni-card" data-uni-key="${escapeHtml(uniKey)}">
+      <div class="uni-header" onclick="toggleUni(this)">
+        <div class="uni-name">${escapeHtml(uniKey)}</div>
+        <div class="uni-counts" onclick="event.stopPropagation()">
+          <label class="count-edit apps">
+            <span class="lbl">Apps</span>
+            <input type="number" min="0" value="${uni.apps}"
+                   onchange="editUniCount('${escapeHtml(regionName)}','${escapeHtml(uniKey)}','apps', this.value)"/>
+          </label>
+          <label class="count-edit int">
+            <span class="lbl">Int</span>
+            <input type="number" min="0" value="${uni.interviewed}"
+                   onchange="editUniCount('${escapeHtml(regionName)}','${escapeHtml(uniKey)}','interviewed', this.value)"/>
+          </label>
+          <span class="chev">▼</span>
+        </div>
+      </div>
+      <div class="uni-students">
+        ${chartHtml}
+        ${studentsHtml}
+      </div>
+    </div>
+  `;
+}
+
+function renderRegionDetail(regionName) {
+  const r = DATA[regionName];
+  if (!r) {
+    return `<div class="empty-state"><div class="ico">○</div><div>No applications from <strong>${escapeHtml(regionName)}</strong></div></div>`;
+  }
+  const unisEntries = Object.entries(r.unis).sort((a,b) => b[1].apps - a[1].apps);
+  const unisHtml = unisEntries.length
+    ? unisEntries.map(([key, u]) => renderUniCard(u, regionName, key)).join('')
+    : '<div class="empty-state" style="padding:30px 10px;"><div class="ico">○</div><div>No applicants from this region</div></div>';
+
+  return `
+    <div class="region-detail-header">
+      <h3>${escapeHtml(regionName)}</h3>
+      <div class="region-totals">
+        <span class="pill apps">${r.apps} apps</span>
+        ${r.interviewed > 0 ? `<span class="pill int">✓ ${r.interviewed} interviewed</span>` : ''}
+      </div>
+    </div>
+    ${unisHtml}
+  `;
+}
+
+function renderAllUnis() {
+  const allUnis = [];
+  for (const [region, r] of Object.entries(DATA)) {
+    for (const [uniKey, u] of Object.entries(r.unis)) {
+      allUnis.push({ ...u, region, uniKey });
+    }
+  }
+  allUnis.sort((a, b) => b.apps - a.apps);
+  return `
+    <div class="summary-section">
+      <h4>All universities (${allUnis.length}) — sorted by applications. Click to expand and see course distribution.</h4>
+      ${allUnis.map(u => `
+        <div class="uni-card" data-uni-key="${escapeHtml(u.uniKey)}">
+          <div class="uni-header" onclick="toggleUni(this)">
+            <div class="uni-name" style="cursor:pointer;">
+              ${escapeHtml(u.uniKey)}
+              <small style="color:var(--text-muted); font-size:11px; display:block; margin-top:2px; font-weight: 400;">${escapeHtml(u.region)}</small>
+            </div>
+            <div class="uni-counts">
+              <span class="pill apps">${u.apps} apps</span>
+              ${u.interviewed > 0 ? `<span class="pill int">✓${u.interviewed}</span>` : ''}
+              <span class="chev">▼</span>
+            </div>
+          </div>
+          <div class="uni-students">
+            ${u.students.length ? renderCourseChart(u.students) : ''}
+            ${sortStudents(u.students).map(renderStudent).join('') || '<div style="color:var(--text-muted); font-size:12px; padding:6px 0;">No applicant details</div>'}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderForeign() {
+  const items = [];
+  for (const [region, r] of Object.entries(DATA)) {
+    if (region === 'Not specified' || region.startsWith('Foreign:')) {
+      for (const [uniKey, u] of Object.entries(r.unis)) {
+        items.push({ region, uniKey, ...u });
+      }
+    }
+  }
+  if (!items.length) return '<div class="empty-state"><div class="ico">○</div><div>No foreign or unspecified applicants</div></div>';
+  return `
+    <div class="summary-section">
+      <h4>Foreign &amp; unspecified university (${items.length})</h4>
+      ${items.map(it => `
+        <div class="uni-card">
+          <div class="uni-header" onclick="toggleUni(this)">
+            <div class="uni-name" style="cursor:pointer;">
+              ${escapeHtml(it.uniKey)}
+              <small style="color:var(--text-muted); font-size:11px; display:block; margin-top:2px;">${escapeHtml(it.region)}</small>
+            </div>
+            <div class="uni-counts">
+              <span class="pill apps">${it.apps}</span>
+              ${it.interviewed > 0 ? `<span class="pill int">✓${it.interviewed}</span>` : ''}
+              <span class="chev">▼</span>
+            </div>
+          </div>
+          <div class="uni-students">${sortStudents(it.students).map(renderStudent).join('')}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+
+function switchLab(lab) {
+  activeLab = lab;
+  // Update lab buttons
+  document.getElementById('labBtnMusic').classList.toggle('active', lab === 'music');
+  document.getElementById('labBtnEdge').classList.toggle('active', lab === 'edge');
+  document.getElementById('labBtnBoth').classList.toggle('active', lab === 'both');
+
+  const bothTab = document.getElementById('tabBoth');
+  const panelTabs = document.getElementById('panelTabs');
+  const mapWrap = document.getElementById('mapWrap');
+  const mapPanel = document.querySelector('.map-panel');
+
+  if (lab === 'both') {
+    activeTab = 'both';
+    bothTab.style.display = '';
+    // Hide the other 3 tabs — they have no meaning without a map/dataset
+    document.querySelectorAll('.tab[data-tab="region"], .tab[data-tab="all"], .tab[data-tab="other"]').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'both'));
+    mapPanel.style.display = 'none';
+    document.querySelector('.info-panel').style.flex = '1';
+    document.getElementById('mainTitle').innerHTML = 'R&D Labs <span class="accent">2026</span> — Both Programs';
+    document.getElementById('mainSubtitle').textContent = 'Candidates who applied to both R&D Music Lab and R&D EdgePose Lab';
+  } else {
+    bothTab.style.display = 'none';
+    // Restore the other 3 tabs
+    document.querySelectorAll('.tab[data-tab="region"], .tab[data-tab="all"], .tab[data-tab="other"]').forEach(t => t.style.display = '');
+    mapPanel.style.display = '';
+    document.querySelector('.info-panel').style.flex = '';
+    if (activeTab === 'both') {
+      activeTab = 'region';
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'region'));
+    }
+    if (lab === 'music') {
+      DATA = JSON.parse(JSON.stringify(RAW_DATA_MUSIC));
+      document.getElementById('mainTitle').innerHTML = 'R&D Music Lab <span class="accent">2026</span> — Applicant Map';
+      document.getElementById('mainSubtitle').textContent = 'It-Jim AI Trainee Program · distribution by region, university, and selection stage';
+    } else {
+      DATA = JSON.parse(JSON.stringify(RAW_DATA_EDGE));
+      document.getElementById('mainTitle').innerHTML = 'R&D EdgePose Lab <span class="accent edge-accent">2026</span> — Applicant Map';
+      document.getElementById('mainSubtitle').textContent = 'It-Jim AI Trainee Program · EdgePose Lab — Computer Vision & Edge Deployment';
+    }
+    activeRegion = null;
+    applyEdits();
+    recomputeAllTotals();
+    renderMap();
+  }
+  updateHeaderStats();
+  renderPanel();
+}
+
+function updateHeaderStats() {
+  let totalApps = 0, totalInt = 0, totalRegions = 0, totalUnis = 0;
+  const src = activeLab === 'both'
+    ? {music: RAW_DATA_MUSIC, edge: RAW_DATA_EDGE}
+    : {cur: DATA};
+
+  function sumData(d) {
+    for (const r of Object.values(d)) {
+      totalApps += r.apps; totalInt += r.interviewed; totalRegions++;
+      totalUnis += Object.keys(r.unis).length;
+    }
+  }
+
+  if (activeLab === 'both') {
+    sumData(RAW_DATA_MUSIC); sumData(RAW_DATA_EDGE);
+  } else {
+    sumData(DATA);
+  }
+
+  const appsEl = document.getElementById('totalApps');
+  const intEl  = document.getElementById('totalInt');
+  const regEl  = document.getElementById('totalRegions');
+  const uniEl  = document.getElementById('totalUnis');
+  if (appsEl) appsEl.textContent = totalApps;
+  if (intEl)  intEl.textContent  = totalInt;
+  if (regEl)  regEl.textContent  = totalRegions;
+  if (uniEl)  uniEl.textContent  = totalUnis;
+}
+
+function renderBothLabs() {
+  // Collect all students from both labs
+  const musicStudents = [];
+  for (const [region, rObj] of Object.entries(RAW_DATA_MUSIC)) {
+    for (const [uni, uObj] of Object.entries(rObj.unis)) {
+      for (const s of uObj.students) {
+        musicStudents.push({...s, region, uni});
+      }
+    }
+  }
+  const edgeStudents = [];
+  for (const [region, rObj] of Object.entries(RAW_DATA_EDGE)) {
+    for (const [uni, uObj] of Object.entries(rObj.unis)) {
+      for (const s of uObj.students) {
+        edgeStudents.push({...s, region, uni});
+      }
+    }
+  }
+
+  // Find overlap by name (case-insensitive)
+  const musicNames = new Map(musicStudents.map(s => [s.name.toLowerCase(), s]));
+  const edgeNames  = new Map(edgeStudents.map(s => [s.name.toLowerCase(), s]));
+  const overlaps = [];
+  for (const [key, ms] of musicNames) {
+    if (edgeNames.has(key)) overlaps.push({music: ms, edge: edgeNames.get(key)});
+  }
+
+  function stageBadge(s) {
+    if (!s) return '<span class="stage-badge none">—</span>';
+    if (s.interviewed) return '<span class="stage-badge int">✓ Interviewed</span>';
+    return '<span class="stage-badge app">Applied</span>';
+  }
+
+  if (!overlaps.length) {
+    return `<div class="both-overview">
+      <h3>No candidates found in both programs</h3>
+      <p style="color:var(--text-muted);font-size:13px;">No name matches between Music Lab and EdgePose Lab applicants were detected.</p>
+    </div>`;
+  }
+
+  const rows = overlaps.map(({music: m, edge: e}) => {
+    const li = m.linkedin || e.linkedin;
+    const nameHtml = li
+      ? `<a href="${escapeHtml(li)}" target="_blank" rel="noopener" style="color:var(--text);font-weight:600;text-decoration:none;">${escapeHtml(m.name)} ↗</a>`
+      : `<strong>${escapeHtml(m.name)}</strong>`;
+    return `<tr>
+      <td>${nameHtml}<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${escapeHtml(m.uni)}</div></td>
+      <td>${stageBadge(m)}</td>
+      <td>${stageBadge(e)}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="both-overview">
+    <h3>Candidates in both programs — ${overlaps.length} found</h3>
+    <p style="color:var(--text-muted);font-size:12px;margin-bottom:14px;">These applicants submitted forms for both R&D Music Lab and R&D EdgePose Lab 2026.</p>
+    <table class="both-table">
+      <thead><tr>
+        <th>Candidate</th>
+        <th><span class="both-lab-tag music">🎵 Music Lab</span></th>
+        <th><span class="both-lab-tag edge">📐 EdgePose Lab</span></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderPanel() {
+  const el = document.getElementById('panelContent');
+  if (activeTab === 'both') { el.innerHTML = renderBothLabs(); return; }
+  if (activeTab === 'all') el.innerHTML = renderAllUnis();
+  else if (activeTab === 'other') el.innerHTML = renderForeign();
+  else el.innerHTML = activeRegion ? renderRegionDetail(activeRegion) : 
+       '<div class="empty-state"><div class="ico">←</div><div>Click a region on the map to see its universities and applicants</div></div>';
+}
+
+// ============ INTERACTIONS ============
+function selectRegion(name) {
+  activeRegion = name;
+  activeTab = 'region';
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'region'));
+  document.querySelectorAll('.region').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-region') === name);
+  });
+  renderPanel();
+}
+function toggleUni(headerEl) { headerEl.parentElement.classList.toggle('expanded'); }
+
+function editUniName(regionName, oldKey, newName) {
+  const r = DATA[regionName];
+  if (!r || !r.unis[oldKey]) return;
+  newName = newName.trim();
+  if (!newName || newName === oldKey) return;
+  // Rename key (preserve order roughly)
+  const newUnis = {};
+  for (const [k, v] of Object.entries(r.unis)) {
+    newUnis[k === oldKey ? newName : k] = v;
+  }
+  r.unis = newUnis;
+  renderPanel();
+}
+function editUniCount(regionName, uniKey, field, val) {
+  const r = DATA[regionName];
+  if (!r || !r.unis[uniKey]) return;
+  const n = Math.max(0, parseInt(val, 10) || 0);
+  r.unis[uniKey][field] = n;
+  recomputeAllTotals();
+  renderMap();
+  renderPanel();
+}
+function resetEdits() {
+  if (!confirm('Reset all edits for this lab to the original parsed data? This clears saved edits for everyone.')) return;
+  DATA = JSON.parse(JSON.stringify(activeLab === 'edge' ? RAW_DATA_EDGE : RAW_DATA_MUSIC));
+  if (window.FB && window.FB.clearLab) window.FB.clearLab(activeLab);
+  recomputeAllTotals();
+  renderMap();
+  renderPanel();
+}
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    activeTab = t.dataset.tab;
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+    renderPanel();
+  });
+});
+
+// ============ LOAD GEOJSON ============
+const GEOJSON_SOURCES = [
+  'https://cdn.jsdelivr.net/gh/EugeneBorshch/ukraine_geojson@master/UA_FULL_Ukraine.geojson',
+  'https://raw.githubusercontent.com/EugeneBorshch/ukraine_geojson/master/UA_FULL_Ukraine.geojson',
+];
+
+async function loadGeo() {
+  for (const src of GEOJSON_SOURCES) {
+    try {
+      const resp = await fetch(src);
+      if (!resp.ok) continue;
+      const gj = await resp.json();
+      if (gj && gj.features && gj.features.length) return gj.features;
+    } catch (e) {
+      console.warn('GeoJSON load failed for', src, e);
+    }
+  }
+  return null;
+}
+
+(async function init() {
+  recomputeAllTotals();
+  const features = await loadGeo();
+  if (features) {
+    geojsonFeatures = features;
+    renderMap();
+  } else {
+    document.getElementById('mapWrap').innerHTML = `
+      <div class="empty-state" style="padding:80px 20px;">
+        <div class="ico">⚠</div>
+        <div style="margin-bottom:8px;"><strong>Could not load map outlines</strong></div>
+        <div style="font-size:12px;">Open this file with internet connection to load Ukraine GeoJSON from CDN.<br>
+        The data table on the right still works fully.</div>
+      </div>`;
+  }
+  applyEdits();
+  recomputeAllTotals();
+  renderPanel();
+
+  // Live sync: when Firebase edits load or change (from anyone), re-apply + re-render
+  window.addEventListener('fb-edits-loaded', () => {
+    if (activeLab !== 'both') {
+      // rebuild DATA from base then overlay (so removed edits revert)
+      DATA = JSON.parse(JSON.stringify(activeLab === 'edge' ? RAW_DATA_EDGE : RAW_DATA_MUSIC));
+      applyEdits();
+      recomputeAllTotals();
+      if (geojsonFeatures.length) renderMap();
+    }
+    renderPanel();
+  });
+
+  // If Firebase already fired before this listener was attached, apply now
+  if (window.FB_LOADED) {
+    DATA = JSON.parse(JSON.stringify(activeLab === 'edge' ? RAW_DATA_EDGE : RAW_DATA_MUSIC));
+    applyEdits();
+    recomputeAllTotals();
+    if (geojsonFeatures.length) renderMap();
+    renderPanel();
+  }
+})();
+</script>
+</body>
+</html>
