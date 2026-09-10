@@ -248,7 +248,7 @@ if st.button("← All labs"):
 if LAB == BOTH_LABS:
     st.title("IT-JIM R&D Labs — Applicants")
     st.caption("Candidates who applied to both labs, and where each one got to.")
-    render_labs_map(BOTH_LABS, height=980)
+    render_labs_map(BOTH_LABS)
     st.stop()
 
 LAB_CFG = get_lab(LAB)
@@ -295,10 +295,8 @@ tab_stats, tab_filters, tab_explorer, tab_pool, tab_scores = st.tabs(
 # Tab: Overview & Stats
 # ---------------------------------------------------------------------------
 with tab_stats:
-    st.subheader("Applicant map")
-    # Height is fixed for the iframe, so it is tuned to the map's own layout:
-    # too tall leaves a gap under it before the stats below.
-    render_labs_map(LAB_CFG["map_lab"], height=980)
+    # No heading here: the map carries its own title.
+    render_labs_map(LAB_CFG["map_lab"])
 
     st.divider()
     c1, c2, c3, c4, c5 = st.columns(5)
