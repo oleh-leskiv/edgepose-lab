@@ -67,6 +67,14 @@ _EMBED_JS = """
       frame.style.height = h + "px";
       frame.setAttribute("height", h);
       frame.setAttribute("scrolling", "no");
+      // Streamlit wraps the frame in fixed-height containers. Growing only the
+      // frame makes it spill out of that wrapper and cover the charts below,
+      // so the wrappers have to grow with it.
+      var box = frame.parentElement;
+      for (var i = 0; i < 2 && box; i++) {
+        box.style.height = h + "px";
+        box = box.parentElement;
+      }
     } catch (err) { /* cross-origin: keep the fallback height */ }
   }
 
