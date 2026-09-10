@@ -51,6 +51,8 @@ _EMBED_CSS = """
 </style>
 """
 
+_HIDE_STATS_CSS = "<style>.stats-bar{display:none !important;}</style>"
+
 _EMBED_JS = """
 <script>
 (function () {
@@ -125,6 +127,10 @@ def render_labs_map(lab: str = "edge", hide_switcher: bool = True) -> None:
 
     html = _read_map_html()
     extra = (_EMBED_CSS if hide_switcher else "") + (_EMBED_JS % {"lab": lab})
+    if lab == "both":
+        # The headline counters are one lab's totals, so they are wrong for the
+        # cross-lab view, which is about the overlap rather than either intake.
+        extra += _HIDE_STATS_CSS
 
     # Appended before </body> so every function it calls is already defined.
     if "</body>" in html:
