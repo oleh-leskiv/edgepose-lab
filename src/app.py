@@ -296,6 +296,30 @@ tab_stats, tab_filters, tab_explorer, tab_pool, tab_scores = st.tabs(
 )
 
 
+def _as_number(value):
+    """A plain float for storage, or None when the cell was cleared."""
+    if not _filled(value):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _same(before, after) -> bool:
+    """Compare two cells treating every flavour of blank as equal.
+
+    The editor hands back NaN for a cleared number, and NaN != NaN, so a plain
+    comparison would report a change on every rerun and write in a loop.
+    """
+    a, b = _as_number(before), _as_number(after)
+    if a is None and b is None:
+        return True
+    if a is None or b is None:
+        return False
+    return abs(a - b) < 1e-9
+
+
 def _as_url(value):
     """A clickable URL, or nothing when the answer isn't actually a link.
 
@@ -931,58 +955,127 @@ with tab_pool:
 # Tab: Interview Scores
 # ---------------------------------------------------------------------------
 with tab_scores:
-    interviewed = df.dropna(subset=["average_score"])
-    if not interviewed.empty:
-        ic1, ic2 = st.columns(2)
-        ic1.metric("Interviewed", len(interviewed))
-        # Audio's interviews were never scored, so the mean is NaN there; show a
-        # dash rather than the literal "nan", which reads like a failure.
-        mean_score = interviewed["average_score"].mean()
-        ic2.metric(
-            "Avg interview score",
-            "—" if pd.isna(mean_score) else f"{mean_score:.1f}",
-        )
-        # Curated columns (see interview_display_columns); junk/duplicate sheet
-        # columns are filtered out. Tidy up the messy multiline headers for
-        # display only.
-        cols = interview_display_columns(interviewed, LAB)
-        scores = interviewed[cols].copy()
+    # Marks are entered here, not in the spreadsheet. The sheet is still read
+    # for labs that were graded there before; anything typed in the app wins.
+    score_keys = LAB_CFG.get("score_columns") or list(INTERVIEWER_NAMES)
+    sheet_score_cols = ["interviewer_1_score", "interviewer_2_score"]
+    scores_state = storage.load_state(LAB)["candidates"]
 
-        # Recording links live in Firestore (the sheet buries them in a cell
-        # hyperlink the API can't read). They are entered from the Candidate
-        # Explorer; shown here, immediately before Decision.
-        rec_state = storage.load_state(LAB)["candidates"]
-        scores["Recording"] = [
-            (rec_state.get(key) or {}).get("recording", "")
-            for key in interviewed["candidate_key"]
-        ]
-        ordered = [c for c in scores.columns if c != "Recording"]
-        if "Decision" in ordered:
-            ordered.insert(ordered.index("Decision"), "Recording")
-        else:
-            ordered.append("Recording")
-        scores = scores[ordered]
+    def _sheet_score(row: pd.Series, position: int):
+        col = sheet_score_cols[position] if position < len(sheet_score_cols) else None
+        return row.get(col) if col else None
 
-        display = scores.rename(
-            columns={
-                "full_name": "Candidate",
-                "interviewer_1_score": _score_label(0),
-                "interviewer_2_score": _score_label(1),
-                "average_score": "Average",
-                "Advise CV Learing Path": "Advise CV path",
-                "Comment \nInterviewer 1\n(Sofiia)": _comment_label(0),
-                "Comment \nInterviewer 2\n(Yura)": _comment_label(1),
-                # The sheet's plain (unsuffixed) variants of the same headings.
-                "Comment \nInterviewer 1": _comment_label(0),
-                "Comment \nInterviewer 2": _comment_label(1),
-            }
+    def _effective(entry: dict, row: pd.Series, position: int, key: str):
+        stored = (entry.get("scores") or {}).get(key)
+        return stored if stored is not None else _sheet_score(row, position)
+
+    # Who belongs on this tab: anyone with a call scheduled, or already graded.
+    # A brand-new lab has no marks yet, so it can't be "has a score" alone --
+    # otherwise there would be no row to type the first score into.
+    rows, keys = [], []
+    for _, row in df.iterrows():
+        key = row["candidate_key"]
+        entry = scores_state.get(key, {})
+        marks = [_effective(entry, row, i, k) for i, k in enumerate(score_keys)]
+        has_mark = any(_filled(m) for m in marks)
+        if not (entry.get("scheduled") or has_mark):
+            continue
+
+        record = {"Candidate": row["full_name"]}
+        for i, k in enumerate(score_keys):
+            value = marks[i]
+            record[_score_label(i)] = float(value) if _filled(value) else None
+        record["Advise CV path"] = bool(
+            entry.get("advise_cv", _filled(row.get("Advise CV Learing Path")))
         )
-        st.dataframe(
-            display,
-            width="stretch",
-            hide_index=True,
-            height=_table_height(len(display)),
-            column_config=_scores_column_config(display),
+        record["Recording"] = (entry.get("recording") or "")
+        record["Decision"] = entry.get("decision", "") or ""
+        rows.append(record)
+        keys.append(key)
+
+    if not rows:
+        st.info(
+            "Nobody is up for an interview yet. Mark a scheduled call on the "
+            "Candidate Explorer tab and they'll appear here to be scored."
         )
     else:
-        st.info("No interviews recorded yet.")
+        editable = pd.DataFrame(rows)
+        graded = [
+            [r[_score_label(i)] for i in range(len(score_keys))] for r in rows
+        ]
+        averages = [
+            sum(v for v in marks if v is not None) / len([v for v in marks if v is not None])
+            if any(v is not None for v in marks) else None
+            for marks in graded
+        ]
+        editable.insert(1 + len(score_keys), "Average", averages)
+
+        done = [a for a in averages if a is not None]
+        m1, m2 = st.columns(2)
+        m1.metric("Scored", f"{len(done)} / {len(editable)}")
+        m2.metric(
+            "Avg interview score",
+            "—" if not done else f"{sum(done) / len(done):.1f}",
+        )
+
+        # A score belongs to one person: only its owner may change it. The
+        # shared judgement columns are open to everyone on the lab.
+        may_edit_shared = current_interviewer_key is not None or is_admin
+        locked = ["Candidate", "Average", "Recording"]
+        for i, k in enumerate(score_keys):
+            if k != current_interviewer_key:
+                locked.append(_score_label(i))
+        if not may_edit_shared:
+            locked += ["Advise CV path", "Decision"]
+
+        st.caption(
+            "Scores save as you type; the average is recalculated automatically. "
+            "You can only change your own score column."
+        )
+
+        config = {
+            "Candidate": st.column_config.Column("Candidate", width="medium"),
+            "Average": st.column_config.NumberColumn("Average", format="%.2f", width="small"),
+            "Advise CV path": st.column_config.CheckboxColumn("Advise CV path", width="small"),
+            "Recording": st.column_config.LinkColumn(
+                "Recording", display_text="Open recording", width="small"
+            ),
+            "Decision": st.column_config.TextColumn("Decision", width="medium"),
+        }
+        for i in range(len(score_keys)):
+            label = _score_label(i)
+            config[label] = st.column_config.NumberColumn(
+                label, min_value=0, max_value=10, step=0.5, width="small"
+            )
+
+        edited = st.data_editor(
+            editable,
+            width="stretch",
+            hide_index=True,
+            height=_table_height(len(editable), max_rows=200),
+            disabled=locked,
+            column_config=config,
+            key=f"scores_editor_{LAB}",
+        )
+
+        # Persist only what actually changed, field by field, so two people
+        # editing different candidates never overwrite each other.
+        changed = False
+        for position, key in enumerate(keys):
+            before, after = editable.iloc[position], edited.iloc[position]
+            for i, who in enumerate(score_keys):
+                label = _score_label(i)
+                if who != current_interviewer_key:
+                    continue
+                if not _same(before[label], after[label]):
+                    storage.set_score(key, who, _as_number(after[label]), LAB)
+                    changed = True
+            if may_edit_shared:
+                if bool(before["Advise CV path"]) != bool(after["Advise CV path"]):
+                    storage.set_advise_cv(key, bool(after["Advise CV path"]), LAB)
+                    changed = True
+                if (before["Decision"] or "") != (after["Decision"] or ""):
+                    storage.set_decision(key, after["Decision"] or "", LAB)
+                    changed = True
+        if changed:
+            st.rerun()
