@@ -36,7 +36,18 @@ _EMBED_CSS = """
   /* Sit flush against the surrounding page instead of floating in a box. */
   html, body { background: transparent !important; overflow: hidden !important; }
   body { margin: 0 !important; padding: 0 !important; }
-  .wrap, .container, main { padding-top: 0 !important; margin-top: 0 !important; }
+  .container { padding-top: 0 !important; margin-top: 0 !important; }
+
+  /* Inside an iframe, 100vh is the frame's own height. The map's own
+     "min-height: 100vh" therefore stretches the content to whatever the frame
+     currently is, so a measured height can only ever grow -- which left a gap
+     under short lists. Standing the rule down lets the content report its real
+     size, and the frame follows it in both directions. */
+  body { min-height: 0 !important; height: auto !important; }
+
+  /* Same reason, and it also removes the panel's inner scrollbar: the list of
+     students grows the page instead of scrolling inside a fixed box. */
+  .panel-content { max-height: none !important; overflow-y: visible !important; }
 </style>
 """
 
