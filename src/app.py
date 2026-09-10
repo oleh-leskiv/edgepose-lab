@@ -13,10 +13,15 @@ import streamlit as st
 import storage
 from map_view import render_labs_map
 from data import (
+    COMPACT_COLUMNS,
     LABS,
+    LINK_COLUMNS,
+    LONG_TEXT_COLUMNS,
     SKILL_COLUMNS,
     SKILL_LABELS,
+    answer_columns,
     apply_filters,
+    column_label,
     explode_counts,
     get_lab,
     interview_display_columns,
@@ -291,6 +296,73 @@ tab_stats, tab_filters, tab_explorer, tab_pool, tab_scores = st.tabs(
 )
 
 
+def _as_url(value):
+    """A clickable URL, or nothing when the answer isn't actually a link.
+
+    People typed bare domains ("linkedin.com/in/x"), placeholders ("N/A") and
+    quoted junk into these fields, so the raw text can't go straight into a
+    link column.
+    """
+    url, _text = normalize_link(value)
+    return url
+
+
+def _column_width(col: str) -> str:
+    """Narrow for ratings, wide for prose, medium for the rest."""
+    if col in LONG_TEXT_COLUMNS:
+        return "large"
+    if col in SKILL_COLUMNS or col == "full_name":
+        return "small" if col != "full_name" else "medium"
+    return "medium"
+
+
+@st.dialog("Interview pool decision", width="large")
+def open_decision_dialog(row: pd.Series) -> None:
+    """Full answers for one candidate, plus the vote and note, over the table."""
+    st.subheader(row["full_name"])
+    st.caption(f"{_show(row.get('position'))} · {_show(row.get('affiliation'))} · {_show(row.get('city'))}")
+
+    key = row["candidate_key"]
+    state = storage.load_state(LAB)["candidates"].get(key, {})
+    pool = state.get("pool", {})
+    notes = state.get("notes", {})
+
+    who = current_interviewer_key
+    if who is None:
+        st.info("You can review the answers here; only interviewers can record a decision.")
+    else:
+        name = INTERVIEWER_NAMES.get(who, who)
+        vote = st.checkbox(
+            f"{name}: worth an interview", value=bool(pool.get(who)), key=f"dlg_vote_{key}"
+        )
+        note = st.text_area(
+            f"{name}'s feedback", value=notes.get(who, ""), key=f"dlg_note_{key}"
+        )
+        if st.button("Save", type="primary", key=f"dlg_save_{key}"):
+            if vote != bool(pool.get(who)):
+                storage.set_pool_flag(key, who, vote, LAB)
+            if note != notes.get(who, ""):
+                storage.set_note(key, who, note, LAB)
+            st.rerun()
+
+    # Everyone's current standing, so a decision is made with the others in view.
+    marks = [
+        f"{label}: {'✅' if pool.get(k) else '–'}"
+        for k, label in INTERVIEWER_NAMES.items()
+    ]
+    st.markdown("**Votes so far:** " + " · ".join(marks))
+
+    st.divider()
+    st.markdown("**All form answers**")
+    for col in answer_columns(LAB, row.to_frame().T):
+        if col == "full_name":
+            continue
+        value = row.get(col)
+        if not _filled(value):
+            continue
+        st.markdown(f"**{column_label(col)}:** {value}")
+
+
 # ---------------------------------------------------------------------------
 # Tab: Overview & Stats
 # ---------------------------------------------------------------------------
@@ -392,7 +464,8 @@ with tab_filters:
         "or Both both match); across fields it's AND. Leave a field empty to not filter on it."
     )
 
-    saved_filters = storage.load_state(LAB).get("filters", {})
+    saved_state = storage.load_state(LAB)
+    saved_filters = saved_state.get("filters", {})
     for column, _label, _kind in FILTER_FIELDS:
         key = f"filter_{column}"
         if key not in st.session_state:
@@ -410,11 +483,13 @@ with tab_filters:
 
     current_filters = {column: st.session_state[f"filter_{column}"] for column, _, _ in FILTER_FIELDS}
 
-    btn_save, btn_reset = st.columns([1, 1])
-    if btn_save.button("Save filters", width="stretch"):
-        storage.save_filters({k: v for k, v in current_filters.items() if v}, LAB)
-        st.success("Filters saved — they'll be pre-loaded next time the app starts.")
-    if btn_reset.button("Reset filters", width="stretch"):
+    # Filters persist by themselves: whatever is set here is what everyone sees
+    # next time, so nobody has to remember to press save.
+    active_filters = {k: v for k, v in current_filters.items() if v}
+    if active_filters != {k: v for k, v in saved_filters.items() if v}:
+        storage.save_filters(active_filters, LAB)
+
+    if st.button("Reset filters"):
         # Delete the widget-backed keys rather than assigning to them: Streamlit
         # forbids setting session_state for a key tied to an instantiated widget
         # (raises StreamlitAPIException). After deletion + rerun the multiselects
@@ -426,11 +501,90 @@ with tab_filters:
 
     filtered_df = apply_filters(df, current_filters, LAB)
     st.metric("Candidates matching filters", f"{len(filtered_df)} / {len(df)}")
-    st.dataframe(
-        filtered_df[["full_name", "university", "english_level", "dl_framework"] + SKILL_COLUMNS],
+
+    # Every form question is available here so nobody has to open the sheet.
+    # Showing all of them at once is unreadable, so a compact set is on by
+    # default and the rest can be switched on per session.
+    all_cols = answer_columns(LAB, filtered_df)
+
+    # The compact set is a shared, saved preference: whatever the three of us
+    # last chose is what everyone sees next time. Falls back to a sensible
+    # starting set the first time a lab is opened.
+    saved_columns = [c for c in saved_state.get("columns", []) if c in all_cols]
+    compact_cols = saved_columns or [c for c in COMPACT_COLUMNS if c in all_cols]
+
+    # Labs ask different questions, so a selection made in one lab must not
+    # carry over into the next.
+    if st.session_state.get("filter_cols_lab") != LAB:
+        st.session_state["filter_cols_lab"] = LAB
+        st.session_state["filter_visible_cols"] = compact_cols
+        st.session_state["show_all_columns"] = False
+    if "filter_visible_cols" not in st.session_state:
+        st.session_state["filter_visible_cols"] = compact_cols
+
+    with st.expander("Columns shown", expanded=True):
+        pick_all, pick_compact = st.columns([1, 1])
+        if pick_all.button("Show every question", width="stretch"):
+            # A temporary look at everything; the saved compact set is untouched.
+            st.session_state["show_all_columns"] = True
+            st.rerun()
+        if pick_compact.button("Back to compact", width="stretch"):
+            st.session_state["show_all_columns"] = False
+            st.rerun()
+
+        st.multiselect(
+            "Columns",
+            all_cols,
+            key="filter_visible_cols",
+            format_func=column_label,
+            label_visibility="collapsed",
+            disabled=st.session_state.get("show_all_columns", False),
+        )
+
+        chosen = st.session_state["filter_visible_cols"]
+        if chosen != compact_cols and not st.session_state.get("show_all_columns"):
+            storage.save_columns(chosen, LAB)
+            compact_cols = chosen
+
+        if st.session_state.get("show_all_columns"):
+            st.caption("Showing every question. The saved column set is unchanged.")
+
+    visible_source = all_cols if st.session_state.get("show_all_columns") else st.session_state["filter_visible_cols"]
+    visible = [c for c in visible_source if c in filtered_df.columns]
+    table = filtered_df[["full_name"] + [c for c in visible if c != "full_name"]]
+
+    st.caption("Click a row to open the candidate and record an interview-pool decision.")
+
+    # Links are clickable; everything else keeps a width suited to its content.
+    table_config = {}
+    for col in table.columns:
+        label = column_label(col)
+        if col in LINK_COLUMNS:
+            table_config[label] = st.column_config.LinkColumn(
+                label, display_text="Open", width="small"
+            )
+        else:
+            table_config[label] = st.column_config.Column(label, width=_column_width(col))
+
+    display_table = table.copy()
+    for col in LINK_COLUMNS:
+        if col in display_table.columns:
+            display_table[col] = display_table[col].apply(_as_url)
+
+    selection = st.dataframe(
+        display_table.rename(columns={c: column_label(c) for c in display_table.columns}),
         width="stretch",
         hide_index=True,
+        height=_table_height(len(display_table), max_rows=400),
+        on_select="rerun",
+        selection_mode="single-row",
+        key="filter_table",
+        column_config=table_config,
     )
+
+    picked = selection.get("selection", {}).get("rows", []) if selection else []
+    if picked:
+        open_decision_dialog(filtered_df.iloc[picked[0]])
 
 
 # ---------------------------------------------------------------------------

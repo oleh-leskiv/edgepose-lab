@@ -230,6 +230,100 @@ def lab_multiselect_columns(lab: str | None = None) -> list:
     return get_lab(lab)["multiselect_columns"]
 
 
+# Internal fields that are plumbing rather than an answer to a form question.
+_NON_ANSWER_COLUMNS = {
+    "candidate_key", "timestamp", "consent", "full_name",
+    # Already covered by the combined "Candidate" column.
+    "first_name", "last_name",
+}
+
+# Rendered as clickable links rather than raw text.
+LINK_COLUMNS = {"linkedin", "resume_link"}
+
+
+def answer_columns(lab: str | None, frame) -> list[str]:
+    """Every form answer this lab has, in the order the form asks them.
+
+    Derived from the lab's rename map, so a new lab's questions appear without
+    a code change; the exploded "_list" helpers and internal keys are left out.
+    """
+    ordered = [c for c in lab_rename(lab).values() if c not in _NON_ANSWER_COLUMNS]
+    seen, result = set(), ["full_name"]
+    for col in ordered:
+        if col in seen or col not in frame.columns:
+            continue
+        # Questions another lab asked are backfilled empty here; don't offer
+        # a column nobody in this lab could have answered.
+        if frame[col].isna().all():
+            continue
+        seen.add(col)
+        result.append(col)
+    return result
+
+
+# Headings for the internal column names, so the table reads like the form.
+COLUMN_LABELS = {
+    "full_name": "Candidate",
+    "first_name": "First name",
+    "last_name": "Last name",
+    "email": "Email",
+    "phone": "Phone",
+    "telegram": "Telegram",
+    "linkedin": "LinkedIn",
+    "resume_link": "Resume",
+    "city": "City",
+    "university": "University",
+    "education_details": "Education details",
+    "affiliation": "Affiliation",
+    "position": "Position",
+    "domain_interest": "Domain interest",
+    "hours_per_week": "Hours/week",
+    "english_level": "English",
+    "skill_python": "Python",
+    "skill_cpp": "C++",
+    "skill_linalg": "Linear algebra",
+    "skill_stats": "Statistics",
+    "dl_framework": "DL framework",
+    "trained_dl_models": "Trained DL models",
+    "read_papers": "Read papers",
+    "mobile_dev": "Mobile dev",
+    "cv_tasks": "CV tasks",
+    "cv_libraries": "CV / 3D libraries",
+    "cv_experience_text": "CV/DL experience",
+    "edge_tools": "Edge tools",
+    "infra_tools": "Infra tools",
+    "graphics_tools": "Graphics / 3D tools",
+    "audio_tasks": "Audio tasks",
+    "audio_experience_text": "Audio & NLP experience",
+    "instruments": "Instruments",
+    "own_projects": "Own projects",
+    "achievements": "Achievements",
+    "motivation": "Motivation",
+    "private_entrepreneur": "Private entrepreneur",
+    "source": "Source",
+    "comments": "Comments",
+    "thoughts": "Thoughts",
+}
+
+
+def column_label(col: str) -> str:
+    return COLUMN_LABELS.get(col, str(col).replace("_", " ").capitalize())
+
+
+# Shown by default: enough to judge a candidate at a glance without scrolling
+# sideways. Everything else is one click away in the column picker.
+COMPACT_COLUMNS = [
+    "full_name", "university", "english_level", "hours_per_week",
+    "dl_framework", "skill_python", "skill_cpp", "skill_linalg", "skill_stats",
+]
+
+# Long free-text answers: readable in the candidate dialog, not as a column.
+LONG_TEXT_COLUMNS = {
+    "education_details", "cv_experience_text", "audio_experience_text",
+    "own_projects", "achievements", "motivation", "comments", "thoughts",
+}
+
+
 _PLACEHOLDER_LINKS = {"", "n/a", "-", ".", "none"}
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _BARE_DOMAIN_RE = re.compile(r"^[a-z0-9.-]+\.[a-z]{2,}(/\S*)?$", re.IGNORECASE)

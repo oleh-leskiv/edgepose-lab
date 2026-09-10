@@ -10,7 +10,15 @@ Per-candidate entry shape:
       "notes":     {"sofiia": str,  "oleh": str,  "yurii": str},
       "scheduled": bool,   # Oleh marks candidates with a scheduled call
       "recording": str,    # manually pasted link to the call recording
+      "scores":    {"sofiia": float, "yurii": float},   # interview marks
+      "comments":  {"sofiia": str,   "yurii": str},     # interview write-ups
+      "advise_cv": bool,   # "+" in the Advise CV path column
+      "decision":  str,    # final call, made by Oleh
     }
+
+Interview marks entered here take precedence over the same candidate's row in
+the Interviews sheet, so past labs keep the marks already typed into the sheet
+while new labs never need the sheet touched at all.
 
 Firestore layout (one pair of documents per lab, so labs never mix):
     pool_state/filters            -> EdgePose filters
@@ -28,7 +36,7 @@ import json
 
 import streamlit as st
 
-EMPTY_STATE: dict = {"filters": {}, "candidates": {}}
+EMPTY_STATE: dict = {"filters": {}, "columns": [], "candidates": {}}
 
 _COLLECTION = "pool_state"
 _FILTERS_DOC = "filters"
@@ -62,18 +70,31 @@ def load_state(lab: str | None = None) -> dict:
         db = _client()
         filters_snap = db.collection(_COLLECTION).document(filters_doc).get()
         candidates_snap = db.collection(_COLLECTION).document(candidates_doc).get()
-        filters = (filters_snap.to_dict() or {}).get("filters", {}) if filters_snap.exists else {}
+        settings = (filters_snap.to_dict() or {}) if filters_snap.exists else {}
         candidates = (candidates_snap.to_dict() or {}) if candidates_snap.exists else {}
-        return {"filters": filters, "candidates": candidates}
+        return {
+            "filters": settings.get("filters", {}),
+            "columns": settings.get("columns", []),
+            "candidates": candidates,
+        }
     except Exception as exc:  # noqa: BLE001
         st.error(f"Could not read shared state from Firestore: {exc}")
-        return {"filters": {}, "candidates": {}}
+        return {"filters": {}, "columns": [], "candidates": {}}
 
 
 def save_filters(filters: dict[str, list[str]], lab: str | None = None) -> dict:
     filters_doc, _ = _docs(lab)
     db = _client()
-    db.collection(_COLLECTION).document(filters_doc).set({"filters": filters})
+    # merge: the same document also holds the shared column selection.
+    db.collection(_COLLECTION).document(filters_doc).set({"filters": filters}, merge=True)
+    return load_state(lab)
+
+
+def save_columns(columns: list[str], lab: str | None = None) -> dict:
+    """Which form questions the table shows, shared by everyone on this lab."""
+    filters_doc, _ = _docs(lab)
+    db = _client()
+    db.collection(_COLLECTION).document(filters_doc).set({"columns": columns}, merge=True)
     return load_state(lab)
 
 
@@ -112,6 +133,29 @@ def set_scheduled_call(email: str, value: bool, lab: str | None = None) -> dict:
 def set_recording_url(email: str, url: str, lab: str | None = None) -> dict:
     """Store a manually-entered link to the interview recording."""
     return _update_candidate(email, lambda e: e.__setitem__("recording", url.strip()), lab)
+
+
+def _set_in(entry: dict, bucket: str, key: str, value) -> None:
+    entry.setdefault(bucket, {})[key] = value
+
+
+def set_score(email: str, interviewer_key: str, value, lab: str | None = None) -> dict:
+    """Record one interviewer's mark; None clears it."""
+    return _update_candidate(email, lambda e: _set_in(e, "scores", interviewer_key, value), lab)
+
+
+def set_interview_comment(email: str, interviewer_key: str, text: str, lab: str | None = None) -> dict:
+    return _update_candidate(email, lambda e: _set_in(e, "comments", interviewer_key, text), lab)
+
+
+def set_advise_cv(email: str, value: bool, lab: str | None = None) -> dict:
+    """Mark the candidate as worth a CV learning path."""
+    return _update_candidate(email, lambda e: e.__setitem__("advise_cv", value), lab)
+
+
+def set_decision(email: str, text: str, lab: str | None = None) -> dict:
+    """Final decision on the candidate."""
+    return _update_candidate(email, lambda e: e.__setitem__("decision", text.strip()), lab)
 
 
 def import_from_json(path: str) -> dict:
