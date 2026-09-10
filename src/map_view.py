@@ -58,11 +58,18 @@ _EMBED_JS = """
     try {
       var frame = window.frameElement;
       if (!frame) return;
-      var h = Math.max(
-        document.body.scrollHeight,
-        document.documentElement.scrollHeight
-      );
-      if (!h || Math.abs(h - last) < 2) return;
+      // Measure where the content actually ends, not the page's scrollHeight:
+      // once the frame has grown, scrollHeight can never report less than the
+      // frame itself, so the height would only ever ratchet upwards and leave
+      // a gap under shorter lists.
+      var bottom = 0;
+      var kids = document.body.children;
+      for (var i = 0; i < kids.length; i++) {
+        var box = kids[i].getBoundingClientRect();
+        if (box.height) bottom = Math.max(bottom, box.bottom);
+      }
+      var h = Math.ceil(bottom + window.scrollY) + 8;
+      if (!h || Math.abs(h - last) < 4) return;
       last = h;
       frame.style.height = h + "px";
       frame.setAttribute("height", h);
