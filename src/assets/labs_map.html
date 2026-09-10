@@ -429,6 +429,37 @@
   .edge-accent { color: #7c6af7 !important; }
   .edge-accent-soft { border-color: rgba(124,106,247,0.4) !important; background: rgba(124,106,247,0.1) !important; }
 
+
+  /* Hired: pinned to the top of their university and gently pulsing. */
+  .student.hired {
+    position: relative;
+    border-radius: 8px;
+    padding-left: 12px;
+    background: linear-gradient(90deg, rgba(46,196,182,0.13), rgba(46,196,182,0.02));
+    box-shadow: inset 3px 0 0 var(--accent-2, #2ec4b6);
+    animation: hiredPulse 2.6s ease-in-out infinite;
+  }
+  .student.hired .student-name { color: var(--accent-2, #2ec4b6); }
+  .hired-badge {
+    margin-left: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: #0d1117;
+    background: var(--accent-2, #2ec4b6);
+    vertical-align: middle;
+  }
+  @keyframes hiredPulse {
+    0%, 100% { box-shadow: inset 3px 0 0 var(--accent-2, #2ec4b6), 0 0 0 0 rgba(46,196,182,0.35); }
+    50%      { box-shadow: inset 3px 0 0 var(--accent-2, #2ec4b6), 0 0 0 7px rgba(46,196,182,0); }
+  }
+  /* Respect a reduced-motion preference: keep the colour, drop the movement. */
+  @media (prefers-reduced-motion: reduce) {
+    .student.hired { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -906,9 +937,23 @@ const COURSE_BUCKETS = [
 
 // Sort order: interviewed first, then by course bucket (1st → graduates → unknown)
 const BUCKET_SORT_ORDER = { '1st': 0, '2nd': 1, '3rd': 2, '4th': 3, '5th': 4, 'graduates': 5, 'unknown': 6 };
+function isHired(s) {
+  // Company is typed by hand, so compare loosely: "It-Jim", "IT JIM", "itjim".
+  const c = (s.company || '').toLowerCase().replace(/[^a-z]/g, '');
+  return c.indexOf('itjim') !== -1;
+}
+
+function studentRank(s) {
+  if (isHired(s)) return 0;                                   // joined us
+  if (s.interviewed && s.interview_url && s.interview_url.trim()) return 1;
+  if (s.interviewed) return 2;                                // no recording yet
+  return 3;                                                   // never interviewed
+}
+
 function sortStudents(students) {
   return students.slice().sort((a, b) => {
-    if (a.interviewed !== b.interviewed) return a.interviewed ? -1 : 1;
+    const ar = studentRank(a), br = studentRank(b);
+    if (ar !== br) return ar - br;
     const ao = BUCKET_SORT_ORDER[a.bucket] ?? 99;
     const bo = BUCKET_SORT_ORDER[b.bucket] ?? 99;
     if (ao !== bo) return ao - bo;
@@ -1025,11 +1070,12 @@ function renderStudent(s) {
   })();
 
   return `
-    <div class="student ${s.interviewed ? 'interviewed' : ''}">
+    <div class="student ${s.interviewed ? 'interviewed' : ''} ${isHired(s) ? 'hired' : ''}">
       <div class="student-info">
         <div class="student-name">
           ${s.interviewed ? '<span class="check">✓</span>' : ''}
           ${escapeHtml(s.name)}
+          ${isHired(s) ? '<span class="hired-badge">joined It-Jim</span>' : ''}
         </div>
         <div class="student-year" id="${sid}_yearrow">
           <span class="year-text">${escapeHtml(s.year || '—')}</span>
