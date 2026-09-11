@@ -965,14 +965,27 @@ with tab_scores:
         col = sheet_score_cols[position] if position < len(sheet_score_cols) else None
         return row.get(col) if col else None
 
+    sheet_comment_cols = ["Comment \nInterviewer 1", "Comment \nInterviewer 2"]
+
     def _effective(entry: dict, row: pd.Series, position: int, key: str):
         stored = (entry.get("scores") or {}).get(key)
         return stored if stored is not None else _sheet_score(row, position)
 
+    def _comment_of(entry: dict, row: pd.Series, who: str) -> str:
+        """This person's write-up: what they typed here, else the sheet's."""
+        stored = (entry.get("comments") or {}).get(who)
+        if _filled(stored):
+            return str(stored)
+        if who in score_keys:
+            col = sheet_comment_cols[score_keys.index(who)]
+            if col in row.index and _filled(row.get(col)):
+                return str(row.get(col))
+        return ""
+
     # Who belongs on this tab: anyone with a call scheduled, or already graded.
     # A brand-new lab has no marks yet, so it can't be "has a score" alone --
     # otherwise there would be no row to type the first score into.
-    rows, keys = [], []
+    rows, keys, candidate_rows = [], [], {}
     for _, row in df.iterrows():
         key = row["candidate_key"]
         entry = scores_state.get(key, {})
@@ -990,8 +1003,18 @@ with tab_scores:
         )
         record["Recording"] = (entry.get("recording") or "")
         record["Decision"] = entry.get("decision", "") or ""
+
+        # Who has written up this interview. Initials keep the column narrow;
+        # the text itself is edited below the table, where there is room.
+        written = [
+            label[0] for k, label in INTERVIEWER_NAMES.items()
+            if _filled(_comment_of(entry, row, k))
+        ]
+        record["Notes"] = " ".join(written) if written else "—"
+
         rows.append(record)
         keys.append(key)
+        candidate_rows[key] = row
 
     if not rows:
         st.info(
@@ -1021,7 +1044,7 @@ with tab_scores:
         # A score belongs to one person: only its owner may change it. The
         # shared judgement columns are open to everyone on the lab.
         may_edit_shared = current_interviewer_key is not None or is_admin
-        locked = ["Candidate", "Average", "Recording"]
+        locked = ["Candidate", "Average", "Recording", "Notes"]
         for i, k in enumerate(score_keys):
             if k != current_interviewer_key:
                 locked.append(_score_label(i))
@@ -1041,6 +1064,9 @@ with tab_scores:
                 "Recording", display_text="Open recording", width="small"
             ),
             "Decision": st.column_config.TextColumn("Decision", width="medium"),
+            "Notes": st.column_config.Column(
+                "Notes", width="small", help="Initials of everyone who wrote up this interview"
+            ),
         }
         for i in range(len(score_keys)):
             label = _score_label(i)
@@ -1079,3 +1105,32 @@ with tab_scores:
                     changed = True
         if changed:
             st.rerun()
+
+        # Write-ups live under the table rather than in cells: an interview note
+        # is a few sentences, which a grid column can neither show nor edit
+        # comfortably.
+        st.divider()
+        st.subheader("Interview write-ups")
+
+        labels = {k: editable.iloc[i]["Candidate"] for i, k in enumerate(keys)}
+        pick = st.selectbox(
+            "Candidate",
+            keys,
+            format_func=lambda k: f"{labels[k]}  ({dict(zip(keys, editable['Notes']))[k]})",
+            key=f"notes_pick_{LAB}",
+        )
+
+        picked_entry = scores_state.get(pick, {})
+        picked_row = candidate_rows[pick]
+
+        for who, name in INTERVIEWER_NAMES.items():
+            existing = _comment_of(picked_entry, picked_row, who)
+            if who == current_interviewer_key:
+                text = st.text_area(
+                    f"{name}'s write-up", value=existing, key=f"note_{LAB}_{pick}_{who}"
+                )
+                if st.button(f"Save {name}'s write-up", key=f"savenote_{LAB}_{pick}_{who}"):
+                    storage.set_interview_comment(pick, who, text, LAB)
+                    st.rerun()
+            else:
+                st.markdown(f"**{name}:** {existing or '—'}")
