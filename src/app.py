@@ -967,6 +967,10 @@ with tab_scores:
 
     sheet_comment_cols = ["Comment \nInterviewer 1", "Comment \nInterviewer 2"]
 
+    # Interviewers first, in the order the sheet numbers them, then anyone else
+    # on the lab who can still add a view.
+    writeup_order = score_keys + [k for k in INTERVIEWER_NAMES if k not in score_keys]
+
     def _effective(entry: dict, row: pd.Series, position: int, key: str):
         stored = (entry.get("scores") or {}).get(key)
         return stored if stored is not None else _sheet_score(row, position)
@@ -994,7 +998,8 @@ with tab_scores:
         if not (entry.get("scheduled") or has_mark):
             continue
 
-        record = {"Candidate": row["full_name"]}
+        record = {"Open": key == st.session_state.get(f"notes_open_{LAB}"),
+                  "Candidate": row["full_name"]}
         for i, k in enumerate(score_keys):
             value = marks[i]
             record[_score_label(i)] = float(value) if _filled(value) else None
@@ -1007,10 +1012,10 @@ with tab_scores:
         # Who has written up this interview. Initials keep the column narrow;
         # the text itself is edited below the table, where there is room.
         written = [
-            label[0] for k, label in INTERVIEWER_NAMES.items()
+            INTERVIEWER_NAMES[k] for k in writeup_order
             if _filled(_comment_of(entry, row, k))
         ]
-        record["Notes"] = " ".join(written) if written else "—"
+        record["Notes"] = ", ".join(written) if written else "—"
 
         rows.append(record)
         keys.append(key)
@@ -1057,13 +1062,16 @@ with tab_scores:
         )
 
         config = {
+            "Open": st.column_config.CheckboxColumn(
+                "📝", width="small", help="Tick to read or write this interview's notes"
+            ),
             "Candidate": st.column_config.Column("Candidate", width="medium"),
             "Average": st.column_config.NumberColumn("Average", format="%.2f", width="small"),
             "Advise CV path": st.column_config.CheckboxColumn("Advise CV path", width="small"),
             "Recording": st.column_config.LinkColumn(
                 "Recording", display_text="Open recording", width="small"
             ),
-            "Decision": st.column_config.TextColumn("Decision", width="medium"),
+            "Decision": st.column_config.TextColumn("Decision", width="small"),
             "Notes": st.column_config.Column(
                 "Notes", width="small", help="Initials of everyone who wrote up this interview"
             ),
@@ -1103,34 +1111,44 @@ with tab_scores:
                 if (before["Decision"] or "") != (after["Decision"] or ""):
                     storage.set_decision(key, after["Decision"] or "", LAB)
                     changed = True
+        # One candidate open at a time: ticking a new row moves the notes to it.
+        open_key = f"notes_open_{LAB}"
+        current_open = st.session_state.get(open_key)
+        newly = [k for i, k in enumerate(keys) if edited.iloc[i]["Open"] and k != current_open]
+        if newly:
+            st.session_state[open_key] = newly[0]
+            st.rerun()
+        elif current_open in keys and not edited.iloc[keys.index(current_open)]["Open"]:
+            st.session_state[open_key] = None
+            st.rerun()
+
         if changed:
             st.rerun()
 
         # Write-ups live under the table rather than in cells: an interview note
         # is a few sentences, which a grid column can neither show nor edit
         # comfortably.
+        pick = st.session_state.get(open_key)
         st.divider()
-        st.subheader("Interview write-ups")
 
-        labels = {k: editable.iloc[i]["Candidate"] for i, k in enumerate(keys)}
-        pick = st.selectbox(
-            "Candidate",
-            keys,
-            format_func=lambda k: f"{labels[k]}  ({dict(zip(keys, editable['Notes']))[k]})",
-            key=f"notes_pick_{LAB}",
-        )
+        if pick not in keys:
+            st.caption("Tick 📝 next to a candidate to read or write the interview notes.")
+        else:
+            st.subheader(
+                f"Interview write-ups — {editable.iloc[keys.index(pick)]['Candidate']}"
+            )
+            picked_entry = scores_state.get(pick, {})
+            picked_row = candidate_rows[pick]
 
-        picked_entry = scores_state.get(pick, {})
-        picked_row = candidate_rows[pick]
-
-        for who, name in INTERVIEWER_NAMES.items():
-            existing = _comment_of(picked_entry, picked_row, who)
-            if who == current_interviewer_key:
-                text = st.text_area(
-                    f"{name}'s write-up", value=existing, key=f"note_{LAB}_{pick}_{who}"
-                )
-                if st.button(f"Save {name}'s write-up", key=f"savenote_{LAB}_{pick}_{who}"):
-                    storage.set_interview_comment(pick, who, text, LAB)
-                    st.rerun()
-            else:
-                st.markdown(f"**{name}:** {existing or '—'}")
+            for who in writeup_order:
+                name = INTERVIEWER_NAMES[who]
+                existing = _comment_of(picked_entry, picked_row, who)
+                if who == current_interviewer_key:
+                    text = st.text_area(
+                        f"{name}'s write-up", value=existing, key=f"note_{LAB}_{pick}_{who}"
+                    )
+                    if st.button(f"Save {name}'s write-up", key=f"savenote_{LAB}_{pick}_{who}"):
+                        storage.set_interview_comment(pick, who, text, LAB)
+                        st.rerun()
+                else:
+                    st.markdown(f"**{name}:** {existing or '—'}")
